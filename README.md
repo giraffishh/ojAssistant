@@ -1,0 +1,2 @@
+# ojAssistant
+Sustech本科生计算机通识课程作业平台Jcoder的便捷脚本
