@@ -1,2 +1,4 @@
-# ojAssistant
-Sustech本科生计算机通识课程作业平台Jcoder的便捷脚本
+# OjAssistant
+SustechJcoder平台助手
+
+欢迎提Issus和PullRequests来帮助大家更方便地提交作业
