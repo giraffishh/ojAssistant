@@ -2,7 +2,8 @@ import requests
 import json
 import urllib3
 import re
-import time
+import os
+import pickle
 from datetime import datetime
 
 # 禁用SSL警告
@@ -60,8 +61,6 @@ class OJRequester:
         if not execution:
             print("[\x1b[0;31mx\x1b[0m] 无法从登录页面提取execution参数")
             return False
-
-        print("[\x1b[0;32m+\x1b[0m] 获取到execution参数")
 
         # 步骤5: 提交登录表单
         login_data = {
@@ -147,6 +146,55 @@ class OJRequester:
             print("[\x1b[0;31mx\x1b[0m] 登录状态不完整")
             return False
 
+    def save_cookies(self, filename="oj_cookies.pkl"):
+        """保存cookies到文件"""
+        # Store cookies and additional info like CSRF token and timestamp
+        data = {
+            'cookies': self.session.cookies,
+            'csrf_token': self.csrf_token,
+            'timestamp': datetime.now().timestamp()
+        }
+
+        try:
+            with open(filename, 'wb') as f:
+                pickle.dump(data, f)
+            print(f"[\x1b[0;32m+\x1b[0m] Cookies保存到 {filename}")
+            return True
+        except Exception as e:
+            print(f"[\x1b[0;31mx\x1b[0m] Cookies保存失败·: {e}")
+            return False
+
+    def load_cookies(self, filename="oj_cookies.pkl"):
+        """从文件加载cookies"""
+        if not os.path.exists(filename):
+            print(f"[\x1b[0;33m!\x1b[0m] 没有找到保存的Cookies文件")
+            return False
+
+        try:
+            with open(filename, 'rb') as f:
+                data = pickle.load(f)
+
+            # Check if cookies are too old
+            timestamp = data.get('timestamp', 0)
+            if datetime.now().timestamp() - timestamp > 3600:
+                return False
+
+            # Restore session cookies
+            self.session.cookies = data['cookies']
+            self.csrf_token = data.get('csrf_token')
+
+            return True
+        except Exception as e:
+            print(f"[\x1b[0;31mx\x1b[0m] 保存Cookies时出错: {e}")
+            return False
+
+    def check_login_status(self):
+        """检查Cookies有效性"""
+        courses = self.get_my_courses()
+        if courses and isinstance(courses, dict) and 'list' in courses:
+            return True
+        return False
+
     def get_my_courses(self):
         """获取用户的课程列表"""
         if not self.csrf_token:
@@ -159,22 +207,20 @@ class OJRequester:
         headers = {
             'Content-Type': 'application/x-www-form-urlencoded',
             'X-CSRFToken': self.csrf_token,
-            'Referer': f"{self.base_url}/union",  # 修改为正确的Referer
+            'Referer': f"{self.base_url}/union",
             'Origin': self.base_url,
             'Sec-Fetch-Dest': 'empty',
             'Sec-Fetch-Mode': 'cors',
             'Sec-Fetch-Site': 'same-origin'
         }
 
-        # 设置请求数据 - 这是关键修复
+        # 设置请求数据
         data = {
             'page': '1',
             'offset': '40',
             'query': '',
             'tags': '[]'
         }
-
-        print(f"\n[\x1b[0;36m!\x1b[0m] 获取课程列表...")
 
         # 发送请求
         response = self.session.post(url, headers=headers, data=data, verify=False)
@@ -373,289 +419,304 @@ def main():
 
     requester = OJRequester()
 
-    if requester.cas_login(username, password):
-        print("[\x1b[0;32m+\x1b[0m] CAS登录成功!")
+    # Try loading cookies first
+    login_successful = False
+    if requester.load_cookies():
+        # Verify if cookies are still valid
+        if requester.check_login_status():
+            login_successful = True
+            print("[\x1b[0;32m+\x1b[0m] 使用本地cookies登录成功")
 
-        # 获取课程列表
-        courses = requester.get_my_courses()
-        if courses and 'list' in courses and len(courses['list']) > 0:
-            print("[\x1b[0;32m+\x1b[0m] 您的课程列表:")
-            for i, course in enumerate(courses['list']):
-                print(f"  {i + 1}. [{course['course_id']}] {course['course_name']} - {course['description']}")
+    # If cookies are invalid or not found, perform fresh login
+    if not login_successful:
+        if requester.cas_login(username, password):
+            print("[\x1b[0;32m+\x1b[0m] CAS 登录成功")
+            # Save the new cookies
+            requester.save_cookies()
+            login_successful = True
+        else:
+            print("[\x1b[0;31mx\x1b[0m] CAS 登录失败")
+            return
 
-            # 默认选择第一门课程
-            selected_course = courses['list'][0]['course_id']
+    # 获取课程列表
+    print(f"\n[\x1b[0;36m!\x1b[0m] 获取课程列表...")
+    courses = requester.get_my_courses()
+    if courses and 'list' in courses and len(courses['list']) > 0:
+        print("[\x1b[0;32m+\x1b[0m] 您的课程列表:")
+        for i, course in enumerate(courses['list']):
+            print(f"  {i + 1}. [{course['course_id']}] {course['course_name']} - {course['description']}")
 
-            # 获取课程的作业列表
-            homeworks = requester.get_homeworks_list(selected_course)
-            if homeworks and 'list' in homeworks and len(homeworks['list']) > 0:
-                # 按截止日期排序作业列表
-                sorted_homeworks = sorted(homeworks['list'],
-                                          key=lambda hw: hw.get('nextDate', '9999-12-31 23:59:59'))
+        # 默认选择第一门课程
+        selected_course = courses['list'][0]['course_id']
 
-                # 获取每个作业的详细信息
-                enriched_homeworks = []
-                for hw in sorted_homeworks:
-                    hw_id = hw['homeworkId']
-                    hw_details = requester.get_homework_info(hw_id, selected_course)
-                    if hw_details:
-                        # 将详细信息合并到原始作业信息中
-                        hw['details'] = hw_details
-                        enriched_homeworks.append(hw)
-                    else:
-                        # 即使没有获取到详细信息，也保留原始信息
-                        enriched_homeworks.append(hw)
+        # 获取课程的作业列表
+        homeworks = requester.get_homeworks_list(selected_course)
+        if homeworks and 'list' in homeworks and len(homeworks['list']) > 0:
+            # 按截止日期排序作业列表
+            sorted_homeworks = sorted(homeworks['list'],
+                                      key=lambda hw: hw.get('nextDate', '9999-12-31 23:59:59'))
 
-                # 从datetime模块导入datetime以进行时间比较
-                from datetime import datetime
-                now = datetime.now()
-
-                print("[\x1b[0;32m+\x1b[0m] 该课程的作业列表(按截止日期排序):")
-
-                header = "  {:<3} | {:<15} | {:<8} | {:<8} | {:<10} | {:<7} | {:<21}".format(
-                    "ID", "Name", "Status", "Problems", "Completion", "Score", "Due Date"
-                )
-                print(header)
-                print("-" * len(header))  # 分隔线长度与表头一致
-
-                # 打印作业列表
-                for hw in enriched_homeworks:
-                    # 获取基本信息
-                    hw_id = hw['homeworkId']
-                    hw_name = hw['homeworkName']
-                    due_date = hw.get('nextDate', 'No Due Date')
-                    problems_count = hw.get('problemsCount', 0)
-
-                    # 初始默认值
-                    status = "Unknown"
-                    completion = "0%"
-                    score = "0/0"
-
-                    # 根据state字段判断状态
-                    # state: 1=未开始, 2=进行中, 3=已截止, 4=已完成
-                    state = hw.get('state', 0)
-                    if state == 1:
-                        status = "\x1b[0;33mPending\x1b[0m"
-                    elif state == 2:
-                        status = "\x1b[0;36mActive\x1b[0m"
-                    elif state == 3:
-                        status = "\x1b[0;31mClosed\x1b[0m"
-                    elif state == 4:
-                        status = "\x1b[0;32mFinished\x1b[0m"
-
-                    # 判断截止时间
-                    if due_date != 'No Due Date':
-                        try:
-                            due_datetime = datetime.strptime(due_date, '%Y-%m-%d %H:%M:%S')
-                            if now > due_datetime and state == 2:
-                                status = "\x1b[0;31mExpired\x1b[0m"
-                        except:
-                            pass
-
-                    # 从详细信息中提取完成度和得分
-                    if 'details' in hw and hw['details']:
-                        details = hw['details']
-
-                        # 提取分数信息
-                        if 'currentScore' in details and 'totalScore' in details:
-                            current = details.get('currentScore', 0)
-                            total = details.get('totalScore', 100.0)
-                            score = f"{current}/{int(total)}"
-
-                            # 基于完成率计算完成度
-                            if 'attemptRate' in details:
-                                attempt_rate = details.get('attemptRate', 0)
-                                completion = f"{int(attempt_rate)}%"
-
-                            # 如果分数是满分，更新状态
-                            if current == total and total > 0:
-                                status = "\x1b[0;32mComplete\x1b[0m"
-
-                    # 输出格式化的作业信息行，保证对齐
-                    print("  {:<3} | {:<15} | {:<8} | {:<8} | {:<10} | {:<7} | {:<21}".format(
-                        hw_id, hw_name, status, problems_count, completion, score, due_date
-                    ))
-
-                # 用户输入作业ID
-                print("\n请输入要查看的作业ID(直接回车查看最近作业):", end='')
-                user_input = input().strip()
-
-                # 如果用户没有输入，选择第一个作业
-                selected_hw = None
-                if not user_input:
-                    selected_hw = enriched_homeworks[0]['homeworkId']
+            # 获取每个作业的详细信息
+            enriched_homeworks = []
+            for hw in sorted_homeworks:
+                hw_id = hw['homeworkId']
+                hw_details = requester.get_homework_info(hw_id, selected_course)
+                if hw_details:
+                    # 将详细信息合并到原始作业信息中
+                    hw['details'] = hw_details
+                    enriched_homeworks.append(hw)
                 else:
+                    # 即使没有获取到详细信息，也保留原始信息
+                    enriched_homeworks.append(hw)
+
+            # 从datetime模块导入datetime以进行时间比较
+            from datetime import datetime
+            now = datetime.now()
+
+            print("[\x1b[0;32m+\x1b[0m] 该课程的作业列表(按截止日期排序):")
+
+            header = "  {:<3} | {:<15} | {:<8} | {:<8} | {:<10} | {:<7} | {:<21}".format(
+                "ID", "Name", "Status", "Problems", "Completion", "Score", "Due Date"
+            )
+            print(header)
+            print("-" * len(header))  # 分隔线长度与表头一致
+
+            # 打印作业列表
+            for hw in enriched_homeworks:
+                # 获取基本信息
+                hw_id = hw['homeworkId']
+                hw_name = hw['homeworkName']
+                due_date = hw.get('nextDate', 'No Due Date')
+                problems_count = hw.get('problemsCount', 0)
+
+                # 初始默认值
+                status = "Unknown"
+                completion = "0%"
+                score = "0/0"
+
+                # 根据state字段判断状态
+                # state: 1=未开始, 2=进行中, 3=已截止, 4=已完成
+                state = hw.get('state', 0)
+                if state == 1:
+                    status = "\x1b[0;33mPending\x1b[0m"
+                elif state == 2:
+                    status = "\x1b[0;36mActive\x1b[0m"
+                elif state == 3:
+                    status = "\x1b[0;31mClosed\x1b[0m"
+                elif state == 4:
+                    status = "\x1b[0;32mFinished\x1b[0m"
+
+                # 判断截止时间
+                if due_date != 'No Due Date':
                     try:
-                        selected_hw = int(user_input)
-                        # 验证输入的作业ID是否存在
-                        hw_exists = any(hw['homeworkId'] == selected_hw for hw in enriched_homeworks)
-                        if not hw_exists:
-                            print(f"[\x1b[0;33m!\x1b[0m] 警告: 输入的作业ID {selected_hw} 不在列表中，但仍将尝试获取")
-                    except ValueError:
-                        print("[\x1b[0;31mx\x1b[0m] 无效的输入，请输入数字ID")
+                        due_datetime = datetime.strptime(due_date, '%Y-%m-%d %H:%M:%S')
+                        if now > due_datetime and state == 2:
+                            status = "\x1b[0;31mExpired\x1b[0m"
+                    except:
+                        pass
+
+                # 从详细信息中提取完成度和得分
+                if 'details' in hw and hw['details']:
+                    details = hw['details']
+
+                    # 提取分数信息
+                    if 'currentScore' in details and 'totalScore' in details:
+                        current = details.get('currentScore', 0)
+                        total = details.get('totalScore', 100.0)
+                        score = f"{current}/{int(total)}"
+
+                        # 基于完成率计算完成度
+                        if 'attemptRate' in details:
+                            attempt_rate = details.get('attemptRate', 0)
+                            completion = f"{int(attempt_rate)}%"
+
+                        # 如果分数是满分，更新状态
+                        if current == total and total > 0:
+                            status = "\x1b[0;32mComplete\x1b[0m"
+
+                # 输出格式化的作业信息行，保证对齐
+                print("  {:<3} | {:<15} | {:<8} | {:<8} | {:<10} | {:<7} | {:<21}".format(
+                    hw_id, hw_name, status, problems_count, completion, score, due_date
+                ))
+
+            # 用户输入作业ID
+            print("\n请输入要查看的作业ID(直接回车查看最近作业):", end='')
+            user_input = input().strip()
+
+            # 如果用户没有输入，选择第一个作业
+            selected_hw = None
+            if not user_input:
+                selected_hw = enriched_homeworks[0]['homeworkId']
+            else:
+                try:
+                    selected_hw = int(user_input)
+                    # 验证输入的作业ID是否存在
+                    hw_exists = any(hw['homeworkId'] == selected_hw for hw in enriched_homeworks)
+                    if not hw_exists:
+                        print(f"[\x1b[0;33m!\x1b[0m] 警告: 输入的作业ID {selected_hw} 不在列表中，但仍将尝试获取")
+                except ValueError:
+                    print("[\x1b[0;31mx\x1b[0m] 无效的输入，请输入数字ID")
+                    return
+
+            # 用户选择作业后，获取问题列表
+            # 更新问题列表显示部分代码
+
+            # 用户选择作业后，获取问题列表
+            if selected_hw:
+                # 获取作业问题列表
+                print(f"\n[\x1b[0;36m!\x1b[0m] 获取作业ID{selected_hw}的问题列表...")
+                problems_list = requester.get_homework_problems(selected_hw, selected_course)
+
+                if problems_list and 'list' in problems_list and problems_list['list']:
+
+                    # 预先获取每个问题的详细信息
+                    enriched_problems = []
+                    for problem in problems_list['list']:
+                        problem_id = problem.get('problemId', 'Unknown')
+
+                        # 获取问题详情
+                        problem_info = requester.get_problem_info(problem_id, selected_hw, selected_course)
+
+                        if problem_info:
+                            # 合并详细信息到问题数据
+                            problem['details'] = problem_info
+                            enriched_problems.append(problem)
+                        else:
+                            print(" \x1b[0;31m失败\x1b[0m")
+                            problem['details'] = {}
+                            enriched_problems.append(problem)
+
+                    # 显示问题列表
+                    print("[\x1b[0;32m+\x1b[0m] 请求成功，作业中的问题列表:")
+
+                    # 定义表头
+                    print(" {:<2} | {:<25} | {:<10} | {:<15}".format(
+                        "No.", "Problem Name", "Difficulty", "Time Limit (ms)"
+                    ))
+                    print("-" * 80)  # 固定长度的分隔线
+
+                    # 使用完全不同的格式化方法显示问题列表
+                    for i, problem in enumerate(enriched_problems):
+                        problem_name = problem.get('problemName', 'Unknown')
+                        details = problem.get('details', {})
+
+                        # 提取难度
+                        difficulty = details.get('difficulty', 0)
+                        difficulty_levels = ["Unknown", "Noob", "Easy", "Normal", "Hard", "Demon"]
+                        difficulty_text = difficulty_levels[min(difficulty, 5)]
+
+                        # 提取时间限制
+                        time_limit = "Unknown"
+                        if 'timeLimit' in details and 'Java' in details['timeLimit']:
+                            time_limit = details['timeLimit']['Java']
+
+                        # 基本格式，先不带颜色
+                        base_line = " {:<2}  | {:<25} | {:<10} | {:<15}".format(
+                            i + 1, problem_name, difficulty_text, time_limit
+                        )
+
+                        # 根据难度添加颜色代码，但保持格式
+                        if difficulty == 1:
+                            colored_diff = f"\x1b[0;36mNoob\x1b[0m"  # 青色 - Noob
+                        elif difficulty == 2:
+                            colored_diff = f"\x1b[0;32mEasy\x1b[0m"  # 绿色 - Easy
+                        elif difficulty == 3:
+                            colored_diff = f"\x1b[0;33mNormal\x1b[0m"  # 黄色 - Normal
+                        elif difficulty == 4:
+                            colored_diff = f"\x1b[0;31mHard\x1b[0m"  # 红色 - Hard
+                        elif difficulty == 5:
+                            colored_diff = f"\x1b[0;35mDemon\x1b[0m"  # 紫色 - Demon
+                        else:
+                            colored_diff = "Unknown"
+
+                        # 构造包含颜色的行，使用固定位置替换文本
+                        parts = base_line.split("|")
+                        parts[2] = " " + colored_diff + " " * (11 - len(difficulty_text))
+
+                        colored_line = "|".join(parts)
+                        print(colored_line)
+
+                    # 用户选择问题
+                    print("\n请选择要查看的问题编号(1-{0})，或输入0返回上一级:".format(len(enriched_problems)))
+                    problem_input = input().strip()
+
+                    if problem_input == '0':
+                        print("[\x1b[0;36m!\x1b[0m] 返回上一级...")
                         return
 
-                # 用户选择作业后，获取问题列表
-                # 更新问题列表显示部分代码
+                    try:
+                        problem_index = int(problem_input) - 1
+                        if 0 <= problem_index < len(enriched_problems):
+                            selected_problem = enriched_problems[problem_index]
+                            problem_id = selected_problem['problemId']
 
-                # 用户选择作业后，获取问题列表
-                if selected_hw:
-                    # 获取作业问题列表
-                    print(f"\n[\x1b[0;36m!\x1b[0m] 获取作业ID{selected_hw}的问题列表...")
-                    problems_list = requester.get_homework_problems(selected_hw, selected_course)
-
-                    if problems_list and 'list' in problems_list and problems_list['list']:
-
-                        # 预先获取每个问题的详细信息
-                        enriched_problems = []
-                        for problem in problems_list['list']:
-                            problem_id = problem.get('problemId', 'Unknown')
-
-                            # 获取问题详情
-                            problem_info = requester.get_problem_info(problem_id, selected_hw, selected_course)
+                            # 使用已获取的问题详情，不再重新请求
+                            problem_info = selected_problem.get('details', {})
 
                             if problem_info:
-                                # 合并详细信息到问题数据
-                                problem['details'] = problem_info
-                                enriched_problems.append(problem)
+                                print(f"\n{'-' * 80}")
+                                print(f"问题编号: {problem_index + 1}")
+                                print(f"问题名称: {selected_problem['problemName']}")
+
+                                # 显示问题的其他信息，不显示内容
+                                print(f"{'-' * 40}")
+                                print(f"问题类型: {problem_info.get('problemType', '未知')}")
+
+                                # 显示时间限制
+                                if 'timeLimit' in problem_info:
+                                    time_limits = problem_info['timeLimit']
+                                    print("时间限制:")
+                                    for lang, limit in time_limits.items():
+                                        print(f"  {lang}: {limit} ms")
+
+                                # 显示内存限制
+                                if 'memoryLimit' in problem_info:
+                                    memory_limits = problem_info['memoryLimit']
+                                    print("内存限制:")
+                                    for lang, limit in memory_limits.items():
+                                        print(f"  {lang}: {limit} MB")
+
+                                # 显示IO模式
+                                io_mode = problem_info.get('ioMode', 0)
+                                io_mode_text = "标准输入输出" if io_mode == 0 else "文件输入输出"
+                                print(f"IO模式: {io_mode_text}")
+
+                                # 显示难度 - 问题详情部分
+                                difficulty = problem_info.get('difficulty', 0)
+                                difficulty_text = ["未知", "入门", "简单", "普通", "困难", "魔鬼"][min(difficulty, 5)]
+                                print(f"难度等级: {difficulty_text}")
+
+                                # 显示标签
+                                if 'publicTags' in problem_info and problem_info['publicTags']:
+                                    print("公开标签:", ", ".join(problem_info['publicTags']))
+
+                                # 询问用户是否要查看题目内容
+                                print("\n是否查看题目内容? (y/n):")
+                                content_choice = input().strip().lower()
+
+                                if content_choice == 'y':
+                                    print(f"\n{'-' * 40}")
+                                    print("题目内容:\n")
+                                    if 'content' in problem_info:
+                                        print(problem_info['content'])
+                                    else:
+                                        print("题目内容不可用")
+
+                                print(f"{'-' * 80}")
                             else:
-                                print(" \x1b[0;31m失败\x1b[0m")
-                                problem['details'] = {}
-                                enriched_problems.append(problem)
-
-                        # 显示问题列表
-                        print("[\x1b[0;32m+\x1b[0m] 请求成功，作业中的问题列表:")
-
-                        # 定义表头
-                        print(" {:<2} | {:<25} | {:<10} | {:<15}".format(
-                            "No.", "Problem Name", "Difficulty", "Time Limit (ms)"
-                        ))
-                        print("-" * 80)  # 固定长度的分隔线
-
-                        # 使用完全不同的格式化方法显示问题列表
-                        for i, problem in enumerate(enriched_problems):
-                            problem_name = problem.get('problemName', 'Unknown')
-                            details = problem.get('details', {})
-
-                            # 提取难度
-                            difficulty = details.get('difficulty', 0)
-                            difficulty_levels = ["Unknown", "Noob", "Easy", "Normal", "Hard", "Demon"]
-                            difficulty_text = difficulty_levels[min(difficulty, 5)]
-
-                            # 提取时间限制
-                            time_limit = "Unknown"
-                            if 'timeLimit' in details and 'Java' in details['timeLimit']:
-                                time_limit = details['timeLimit']['Java']
-
-                            # 基本格式，先不带颜色
-                            base_line = " {:<2}  | {:<25} | {:<10} | {:<15}".format(
-                                i + 1, problem_name, difficulty_text, time_limit
-                            )
-
-                            # 根据难度添加颜色代码，但保持格式
-                            if difficulty == 1:
-                                colored_diff = f"\x1b[0;36mNoob\x1b[0m"  # 青色 - Noob
-                            elif difficulty == 2:
-                                colored_diff = f"\x1b[0;32mEasy\x1b[0m"  # 绿色 - Easy
-                            elif difficulty == 3:
-                                colored_diff = f"\x1b[0;33mNormal\x1b[0m"  # 黄色 - Normal
-                            elif difficulty == 4:
-                                colored_diff = f"\x1b[0;31mHard\x1b[0m"  # 红色 - Hard
-                            elif difficulty == 5:
-                                colored_diff = f"\x1b[0;35mDemon\x1b[0m"  # 紫色 - Demon
-                            else:
-                                colored_diff = "Unknown"
-
-                            # 构造包含颜色的行，使用固定位置替换文本
-                            parts = base_line.split("|")
-                            parts[2] = " " + colored_diff + " " * (11 - len(difficulty_text))
-
-                            colored_line = "|".join(parts)
-                            print(colored_line)
-
-                        # 用户选择问题
-                        print("\n请选择要查看的问题编号(1-{0})，或输入0返回上一级:".format(len(enriched_problems)))
-                        problem_input = input().strip()
-
-                        if problem_input == '0':
-                            print("[\x1b[0;36m!\x1b[0m] 返回上一级...")
-                            return
-
-                        try:
-                            problem_index = int(problem_input) - 1
-                            if 0 <= problem_index < len(enriched_problems):
-                                selected_problem = enriched_problems[problem_index]
-                                problem_id = selected_problem['problemId']
-
-                                # 使用已获取的问题详情，不再重新请求
-                                problem_info = selected_problem.get('details', {})
-
-                                if problem_info:
-                                    print(f"\n{'-' * 80}")
-                                    print(f"问题编号: {problem_index + 1}")
-                                    print(f"问题名称: {selected_problem['problemName']}")
-
-                                    # 显示问题的其他信息，不显示内容
-                                    print(f"{'-' * 40}")
-                                    print(f"问题类型: {problem_info.get('problemType', '未知')}")
-
-                                    # 显示时间限制
-                                    if 'timeLimit' in problem_info:
-                                        time_limits = problem_info['timeLimit']
-                                        print("时间限制:")
-                                        for lang, limit in time_limits.items():
-                                            print(f"  {lang}: {limit} ms")
-
-                                    # 显示内存限制
-                                    if 'memoryLimit' in problem_info:
-                                        memory_limits = problem_info['memoryLimit']
-                                        print("内存限制:")
-                                        for lang, limit in memory_limits.items():
-                                            print(f"  {lang}: {limit} MB")
-
-                                    # 显示IO模式
-                                    io_mode = problem_info.get('ioMode', 0)
-                                    io_mode_text = "标准输入输出" if io_mode == 0 else "文件输入输出"
-                                    print(f"IO模式: {io_mode_text}")
-
-                                    # 显示难度 - 问题详情部分
-                                    difficulty = problem_info.get('difficulty', 0)
-                                    difficulty_text = ["未知", "入门", "简单", "普通", "困难", "魔鬼"][min(difficulty, 5)]
-                                    print(f"难度等级: {difficulty_text}")
-
-                                    # 显示标签
-                                    if 'publicTags' in problem_info and problem_info['publicTags']:
-                                        print("公开标签:", ", ".join(problem_info['publicTags']))
-
-                                    # 询问用户是否要查看题目内容
-                                    print("\n是否查看题目内容? (y/n):")
-                                    content_choice = input().strip().lower()
-
-                                    if content_choice == 'y':
-                                        print(f"\n{'-' * 40}")
-                                        print("题目内容:\n")
-                                        if 'content' in problem_info:
-                                            print(problem_info['content'])
-                                        else:
-                                            print("题目内容不可用")
-
-                                    print(f"{'-' * 80}")
-                                else:
-                                    print("[\x1b[0;31mx\x1b[0m] 问题详情不可用")
-                            else:
-                                print("[\x1b[0;31mx\x1b[0m] 无效的问题编号")
-                        except ValueError:
-                            print("[\x1b[0;31mx\x1b[0m] 请输入有效的数字")
-                    else:
-                        print("[\x1b[0;31mx\x1b[0m] 获取问题列表失败或列表为空")
+                                print("[\x1b[0;31mx\x1b[0m] 问题详情不可用")
+                        else:
+                            print("[\x1b[0;31mx\x1b[0m] 无效的问题编号")
+                    except ValueError:
+                        print("[\x1b[0;31mx\x1b[0m] 请输入有效的数字")
                 else:
-                    print("[\x1b[0;31mx\x1b[0m] 未选择有效的作业")
+                    print("[\x1b[0;31mx\x1b[0m] 获取问题列表失败或列表为空")
             else:
-                print("[\x1b[0;31mx\x1b[0m] 无法获取作业列表或列表为空")
+                print("[\x1b[0;31mx\x1b[0m] 未选择有效的作业")
         else:
-            print("[\x1b[0;31mx\x1b[0m] 无法获取课程列表或列表为空")
+            print("[\x1b[0;31mx\x1b[0m] 无法获取作业列表或列表为空")
     else:
-        print("[\x1b[0;31mx\x1b[0m] CAS登录失败!")
+        print("[\x1b[0;31mx\x1b[0m] 无法获取课程列表或列表为空")
 
 
 if __name__ == "__main__":
