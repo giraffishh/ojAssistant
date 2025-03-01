@@ -3,8 +3,9 @@ import json
 import urllib3
 import re
 import os
-import pickle
+from pickle import dump, load
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # 禁用SSL警告
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -157,7 +158,7 @@ class OJRequester:
 
         try:
             with open(filename, 'wb') as f:
-                pickle.dump(data, f)
+                dump(data, f)
             print(f"[\x1b[0;32m+\x1b[0m] Cookies保存到 {filename}")
             return True
         except Exception as e:
@@ -172,11 +173,11 @@ class OJRequester:
 
         try:
             with open(filename, 'rb') as f:
-                data = pickle.load(f)
+                data = load(f)
 
             # Check if cookies are too old
             timestamp = data.get('timestamp', 0)
-            if datetime.now().timestamp() - timestamp > 3600:
+            if datetime.now().timestamp() - timestamp > 7200:
                 return False
 
             # Restore session cookies
@@ -433,7 +434,6 @@ def main():
             print("[\x1b[0;32m+\x1b[0m] CAS 登录成功")
             # Save the new cookies
             requester.save_cookies()
-            login_successful = True
         else:
             print("[\x1b[0;31mx\x1b[0m] CAS 登录失败")
             return
@@ -452,25 +452,43 @@ def main():
         # 获取课程的作业列表
         homeworks = requester.get_homeworks_list(selected_course)
         if homeworks and 'list' in homeworks and len(homeworks['list']) > 0:
+
             # 按截止日期排序作业列表
             sorted_homeworks = sorted(homeworks['list'],
                                       key=lambda hw: hw.get('nextDate', '9999-12-31 23:59:59'))
 
-            # 获取每个作业的详细信息
-            enriched_homeworks = []
-            for hw in sorted_homeworks:
+            # 定义一个工作函数来获取作业详情
+            def fetch_homework_detail(hw):
+                """为单个作业获取详细信息的工作函数"""
                 hw_id = hw['homeworkId']
                 hw_details = requester.get_homework_info(hw_id, selected_course)
                 if hw_details:
                     # 将详细信息合并到原始作业信息中
                     hw['details'] = hw_details
-                    enriched_homeworks.append(hw)
                 else:
-                    # 即使没有获取到详细信息，也保留原始信息
-                    enriched_homeworks.append(hw)
+                    # 没有获取到详细信息时设置空字典
+                    hw['details'] = {}
+                return hw
 
-            # 从datetime模块导入datetime以进行时间比较
-            from datetime import datetime
+            # 使用多线程获取每个作业的详细信息
+            enriched_homeworks = []
+            max_workers = min(5, len(sorted_homeworks))  # 最多5个线程，或作业数量（取较小值）
+
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # 提交所有作业的详情请求到线程池
+                future_to_hw = {executor.submit(fetch_homework_detail, hw): hw for hw in sorted_homeworks}
+
+                # 获取结果
+                for future in as_completed(future_to_hw):
+                    try:
+                        hw = future.result()
+                        enriched_homeworks.append(hw)
+                    except Exception as exc:
+                        hw_id = future_to_hw[future].get('homeworkId', 'Unknown')
+                        print(f"\n[\x1b[0;31mx\x1b[0m] 获取作业 {hw_id} 详情时出错: {exc}")
+                        # 保留原始信息
+                        enriched_homeworks.append(future_to_hw[future])
+
             now = datetime.now()
 
             print("[\x1b[0;32m+\x1b[0m] 该课程的作业列表(按截止日期排序):")
@@ -508,12 +526,9 @@ def main():
 
                 # 判断截止时间
                 if due_date != 'No Due Date':
-                    try:
-                        due_datetime = datetime.strptime(due_date, '%Y-%m-%d %H:%M:%S')
-                        if now > due_datetime and state == 2:
-                            status = "\x1b[0;31mExpired\x1b[0m"
-                    except:
-                        pass
+                    due_datetime = datetime.strptime(due_date, '%Y-%m-%d %H:%M:%S')
+                    if now > due_datetime and state == 2:
+                        status = "\x1b[0;31mExpired\x1b[0m"
 
                 # 从详细信息中提取完成度和得分
                 if 'details' in hw and hw['details']:
@@ -544,7 +559,6 @@ def main():
             user_input = input().strip()
 
             # 如果用户没有输入，选择第一个作业
-            selected_hw = None
             if not user_input:
                 selected_hw = enriched_homeworks[0]['homeworkId']
             else:
@@ -559,9 +573,6 @@ def main():
                     return
 
             # 用户选择作业后，获取问题列表
-            # 更新问题列表显示部分代码
-
-            # 用户选择作业后，获取问题列表
             if selected_hw:
                 # 获取作业问题列表
                 print(f"\n[\x1b[0;36m!\x1b[0m] 获取作业ID{selected_hw}的问题列表...")
@@ -569,25 +580,56 @@ def main():
 
                 if problems_list and 'list' in problems_list and problems_list['list']:
 
-                    # 预先获取每个问题的详细信息
-                    enriched_problems = []
-                    for problem in problems_list['list']:
+                    # 定义函数以获取问题详细信息
+                    def fetch_problem_detail(problem):
+                        """为单个问题获取详细信息的工作函数"""
                         problem_id = problem.get('problemId', 'Unknown')
-
-                        # 获取问题详情
+                        print(f"\r[\x1b[0;36m!\x1b[0m] 获取问题ID {problem_id} 的详情...", end="")
                         problem_info = requester.get_problem_info(problem_id, selected_hw, selected_course)
-
                         if problem_info:
-                            # 合并详细信息到问题数据
                             problem['details'] = problem_info
-                            enriched_problems.append(problem)
                         else:
-                            print(" \x1b[0;31m失败\x1b[0m")
                             problem['details'] = {}
-                            enriched_problems.append(problem)
+                        return problem
+
+                    # 使用多线程获取每个问题的详细信息
+                    original_problems = problems_list['list']
+                    problem_results = {}  # 使用字典存储结果，以保持顺序
+
+                    max_workers = min(10, len(original_problems))  # 最多10个线程
+
+                    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                        # 提交所有问题的详情请求到线程池，并记录原始索引
+                        futures = {}
+                        for i, problem in enumerate(original_problems):
+                            future = executor.submit(fetch_problem_detail, problem)
+                            futures[future] = (i, problem.get('problemId', 'Unknown'))
+
+                        # 创建进度计数
+                        completed = 0
+                        total = len(futures)
+
+                        # 获取结果
+                        for future in as_completed(futures):
+                            try:
+                                problem = future.result()
+                                index, problem_id = futures[future]
+                                problem_results[index] = problem
+                                completed += 1
+                                print(f"\r[\x1b[0;36m!\x1b[0m] 获取问题详情进度: {completed}/{total}", end="")
+                            except Exception as exc:
+                                index, problem_id = futures[future]
+                                print(f"\n[\x1b[0;31mx\x1b[0m] 获取问题 {problem_id} 详情时出错: {exc}")
+                                # 保留原始信息但添加空的details字典
+                                problem = original_problems[index]
+                                problem['details'] = {}
+                                problem_results[index] = problem
+
+                    # 按原始顺序重建问题列表
+                    enriched_problems = [problem_results[i] for i in range(len(original_problems))]
 
                     # 显示问题列表
-                    print("[\x1b[0;32m+\x1b[0m] 请求成功，作业中的问题列表:")
+                    print("\r[\x1b[0;32m+\x1b[0m] 请求成功，作业中的问题列表:")
 
                     # 定义表头
                     print(" {:<2} | {:<25} | {:<10} | {:<15}".format(
@@ -595,7 +637,6 @@ def main():
                     ))
                     print("-" * 80)  # 固定长度的分隔线
 
-                    # 使用完全不同的格式化方法显示问题列表
                     for i, problem in enumerate(enriched_problems):
                         problem_name = problem.get('problemName', 'Unknown')
                         details = problem.get('details', {})
