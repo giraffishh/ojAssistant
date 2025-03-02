@@ -76,7 +76,7 @@ class OJRequester:
 
         if response.status_code != 302 or 'Location' not in response.headers:
             print("[\x1b[0;31mx\x1b[0m] 登录请求失败")
-            if response.status_code == 200 and "用户名或密码错误" in response.text:
+            if response.status_code == 401:
                 print("[\x1b[0;31mx\x1b[0m] 用户名或密码错误")
             return False
 
@@ -189,12 +189,26 @@ class OJRequester:
             print(f"[\x1b[0;31mx\x1b[0m] 保存Cookies时出错: {e}")
             return False
 
-    def check_login_status(self):
+    def check_cookies_status(self):
         """检查Cookies有效性"""
         courses = self.get_my_courses()
         if courses and isinstance(courses, dict) and 'list' in courses:
             return True
         return False
+
+    def clear_session(self):
+        """Clear all cookies and session data to start fresh"""
+        self.session = requests.Session()
+        self.session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+            'Accept': '*/*',
+            'Accept-Language': 'zh-CN,zh;q=0.9',
+            'Sec-Ch-Ua': '"Not(A:Brand";v="99", "Google Chrome";v="133", "Chromium";v="133"',
+            'Sec-Ch-Ua-Mobile': '?0',
+            'Sec-Ch-Ua-Platform': '"Windows"',
+            'Priority': 'u=1, i'
+        })
+        self.csrf_token = None
 
     def get_my_courses(self):
         """获取用户的课程列表"""
@@ -232,7 +246,6 @@ class OJRequester:
                 if 'list' in result and result['list']:
                     return result
                 else:
-                    print("[\x1b[0;33m!\x1b[0m] 获取到的课程列表为空")
                     return result
             except json.JSONDecodeError:
                 print("[\x1b[0;31mx\x1b[0m] 响应不是JSON格式")
@@ -424,9 +437,11 @@ def main():
     login_successful = False
     if requester.load_cookies():
         # Verify if cookies are still valid
-        if requester.check_login_status():
+        if requester.check_cookies_status():
             login_successful = True
             print("[\x1b[0;32m+\x1b[0m] 使用本地cookies登录成功")
+        else:
+            requester.clear_session()
 
     # If cookies are invalid or not found, perform fresh login
     if not login_successful:
