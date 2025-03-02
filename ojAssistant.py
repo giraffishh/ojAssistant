@@ -463,6 +463,29 @@ class OJRequester:
             print(f"[\x1b[0;31mx\x1b[0m] 请求失败，HTTP状态码: {response.status_code}")
             return False
 
+def records_status_color(result_state):
+    if result_state == 'AC':
+        status = "AC"
+        status_color = "\x1b[0;32m"  # 绿色
+    elif result_state == 'WA':
+        status = "WA"
+        status_color = "\x1b[0;31m"  # 红色
+    elif result_state == 'RE':
+        status = "RE"
+        status_color = "\x1b[0;35m"  # 紫色
+    elif result_state == 'CE':
+        status = "CE"
+        status_color = "\x1b[0;33m"  # 黄红色
+    elif result_state == 'TLE':
+        status = "TLE"
+        status_color = "\x1b[0;91m"  # 橙红色
+    elif result_state == 'MLE':
+        status = "MLE"
+        status_color = "\x1b[0;91m"  # 橙红色
+    else:
+        status = result_state
+        status_color = ''
+    return status, status_color
 
 def save_problem_to_file(problem, course_id, homework_id):
     """将题目内容保存为文件"""
@@ -815,7 +838,7 @@ def main():
                     print(" {:<2} | {:<25} | {:<5} | {:<10} | {:<15}".format(
                         "No.", "Problem Name", "Status", "Difficulty", "Time Limit"
                     ))
-                    print("-" * 85)  # 增加分隔线长度
+                    print("-" * 70)  # 增加分隔线长度
 
                     for i, problem in enumerate(enriched_problems):
                         problem_name = problem.get('problemName', 'Unknown')
@@ -829,27 +852,7 @@ def main():
                             # 获取最新提交
                             latest = problem['submission_records'][0]
                             result_state = latest.get('resultState', '')
-
-                            if result_state == 'AC':
-                                status = "AC"
-                                status_color = "\x1b[0;32m"  # 绿色
-                            elif result_state == 'WA':
-                                status = "WA"
-                                status_color = "\x1b[0;31m"  # 红色
-                            elif result_state == 'RE':
-                                status = "RE"
-                                status_color = "\x1b[0;35m"  # 紫色
-                            elif result_state == 'CE':
-                                status = "CE"
-                                status_color = "\x1b[0;91m"  # 橙红色
-                            elif result_state == 'TLE':
-                                status = "TLE"
-                                status_color = "\x1b[0;91m"  # 橙红色
-                            elif result_state == 'MLE':
-                                status = "MLE"
-                                status_color = "\x1b[0;33m"  # 黄色
-                            else:
-                                status = result_state
+                            status, status_color = records_status_color(result_state)
 
                         colored_status = f"{status_color}{status}\x1b[0m"
 
@@ -891,7 +894,7 @@ def main():
                         print(colored_line)
 
                     # 用户选择题目
-                    print("\n请选择要查看的题目编号(1-{0})，或输入0返回上一级:".format(len(enriched_problems)))
+                    print("\n请选择要查看的题目编号(1-{0})，或输入0返回上一级:".format(len(enriched_problems)), end='')
                     problem_input = input().strip()
 
                     if problem_input == '0':
@@ -908,27 +911,27 @@ def main():
                             problem_info = selected_problem.get('details', {})
 
                             if problem_info:
-                                print(f"\n{'-' * 80}")
+                                print(f"\n{'-' * 40}")
                                 print(f"题目编号: {problem_index + 1}")
                                 print(f"题目名称: {selected_problem['problemName']}")
 
-                                # 显示题目的其他信息，不显示内容
+                                # 显示题目的其他信息
                                 print(f"{'-' * 40}")
                                 print(f"题目类型: {problem_info.get('problemType', '未知')}")
 
                                 # 显示时间限制
                                 if 'timeLimit' in problem_info:
                                     time_limits = problem_info['timeLimit']
-                                    print("时间限制:")
+                                    print("时间限制: ", end='')
                                     for lang, limit in time_limits.items():
-                                        print(f"  {lang}: {limit} ms")
+                                        print(f": {limit} ms")
 
                                 # 显示内存限制
                                 if 'memoryLimit' in problem_info:
                                     memory_limits = problem_info['memoryLimit']
-                                    print("内存限制:")
+                                    print("内存限制: ", end='')
                                     for lang, limit in memory_limits.items():
-                                        print(f"  {lang}: {limit} MB")
+                                        print(f"{limit} MB")
 
                                 # 显示IO模式
                                 io_mode = problem_info.get('ioMode', 0)
@@ -943,6 +946,48 @@ def main():
                                 # 显示标签
                                 if 'publicTags' in problem_info and problem_info['publicTags']:
                                     print("公开标签:", ", ".join(problem_info['publicTags']))
+
+                                print(f"{'-' * 40}")
+                                print("[\x1b[0;36m!\x1b[0m]获取最近提交记录中...", end='')
+                                submission_records = requester.get_problem_submission_records(problem_id, selected_hw,
+                                                                                              selected_course)
+
+                                if submission_records and 'list' in submission_records and submission_records['list']:
+                                    records = submission_records['list']
+                                    records_count = min(5, len(records))  # 最多显示5条记录
+
+                                    print(f"\r[\x1b[0;32m+\x1b[0m]最近 {records_count} 条提交记录:")
+
+                                    # 创建表头 - 使用与作业列表相同的风格
+                                    header = " {:<6} | {:<5} | {:<19} | {:<8}".format(
+                                        "Status", "Score", "Submit Time", "Record ID"
+                                    )
+                                    print(header)
+                                    print("-" * len(header))  # 分隔线长度与表头一致
+
+                                    # 显示记录
+                                    for i in range(records_count):
+                                        record = records[i]
+                                        result_state = record.get('resultState', 'Unknown')
+                                        score = record.get('score', 0)
+                                        submission_time = record.get('submissionTime', 'Unknown')
+                                        record_id = record.get('recordId', 'Unknown')
+
+                                        # 获取状态的颜色文本
+                                        result_colored = f"{records_status_color(result_state)[1]}{result_state}\x1b[0m"
+
+                                        # 使用与作业列表相同的格式化方式
+                                        line = " {:<6} | {:<5} | {:<19} | {:<8}".format(
+                                            result_state, score, submission_time, record_id
+                                        )
+
+                                        # 使用替换的方式，将普通状态文本替换为带颜色的文本
+                                        # 这样不会影响原始格式和对齐
+                                        line = line.replace(result_state, result_colored, 1)
+
+                                        print(line)
+                                else:
+                                    print("没有找到提交记录或获取记录失败")
 
                                 # 询问用户是否要保存题目内容到本地
                                 print("\n是否将题目内容保存到本地? (y/n):", end='')
@@ -971,7 +1016,6 @@ def main():
             print("[\x1b[0;31mx\x1b[0m] 无法获取作业列表或列表为空")
     else:
         print("[\x1b[0;31mx\x1b[0m] 无法获取课程列表或列表为空")
-
 
 if __name__ == "__main__":
     main()
