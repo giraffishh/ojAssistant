@@ -1,2 +1,7 @@
-.idea
+/.idea
 oj_cookies.pkl
+/.run
+__pycache__/
+utils/__pycache__/
+ui/__pycache__/
+services/__pycache__/
