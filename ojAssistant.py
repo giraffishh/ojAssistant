@@ -423,7 +423,161 @@ class OJRequester:
             print(f"[\x1b[0;31mx\x1b[0m] 请求失败，HTTP状态码: {response.status_code}")
             return False
 
+    def get_problem_submission_records(self, problem_id, homework_id, course_id):
+        """获取问题的提交记录"""
+        if not self.csrf_token:
+            print("[\x1b[0;31mx\x1b[0m] 没有CSRF令牌，无法发送请求")
+            return False
 
+        url = f"{self.base_url}/api/homework/submit/recent_records/"
+
+        # 设置请求头
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': self.csrf_token,
+            'Referer': f"{self.base_url}/course/{course_id}/homework/{homework_id}",
+            'Origin': self.base_url,
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-origin'
+        }
+
+        # 设置请求数据
+        data = {
+            'problemId': problem_id,
+            'homeworkId': homework_id,
+            'courseId': course_id
+        }
+
+        # 发送请求
+        response = self.session.post(url, headers=headers, data=data, verify=False)
+
+        if response.status_code == 200:
+            try:
+                result = response.json()
+                return result
+            except json.JSONDecodeError:
+                print("[\x1b[0;31mx\x1b[0m] 响应不是JSON格式")
+                return False
+        else:
+            print(f"[\x1b[0;31mx\x1b[0m] 请求失败，HTTP状态码: {response.status_code}")
+            return False
+
+
+def save_problem_to_file(problem, course_id, homework_id):
+    """将题目内容保存为文件"""
+    problem_id = problem.get('problemId', 'unknown')
+    problem_name = problem.get('problemName', 'unknown').replace('/', '-').replace('\\', '-')  # 替换无效文件名字符
+    details = problem.get('details', {})
+
+    # 创建文件名 - 直接在当前目录下保存
+    file_name = f"{homework_id}_{problem_id}_{problem_name}.md"
+
+    # 创建一个markdown格式的内容
+    content = f"# {problem_name}\n\n"
+    content += f"**题目ID:** {problem_id}  \n"
+    content += f"**课程:** {course_id}  \n"
+    content += f"**作业:** {homework_id}  \n\n"
+
+    # 添加题目属性
+    content += "## 题目信息\n\n"
+
+    # 难度
+    difficulty = details.get('difficulty', 0)
+    difficulty_text = ["未知", "入门", "简单", "普通", "困难", "魔鬼"][min(difficulty, 5)]
+    content += f"**难度:** {difficulty_text}  \n"
+
+    # IO模式
+    io_mode = details.get('ioMode', 0)
+    io_mode_text = "标准输入输出" if io_mode == 0 else "文件输入输出"
+    content += f"**IO模式:** {io_mode_text}  \n"
+
+    # 时间限制
+    if 'timeLimit' in details:
+        content += "**时间限制:**"
+        for lang, limit in details['timeLimit'].items():
+            content += f" {lang}: {limit} ms  \n"
+
+    # 内存限制
+    if 'memoryLimit' in details:
+        content += "**内存限制:**"
+        for lang, limit in details['memoryLimit'].items():
+            content += f" {lang}: {limit} MB  \n"
+
+    # 标签
+    if 'publicTags' in details and details['publicTags']:
+        content += "**标签:** " + ", ".join(details['publicTags']) + "  \n"
+
+    content += "\n## 题目描述\n\n"
+
+    # 添加题目内容
+    if 'content' in details:
+        content += details['content'] + "\n"
+    else:
+        content += "题目内容不可用\n"
+
+    # 添加最近提交记录信息（如果有）- 现在显示最多5条记录
+    if 'submission_records' in problem and problem['submission_records']:
+        content += "\n## 最近提交记录\n\n"
+
+        # 获取最多5条提交记录
+        records_to_show = min(5, len(problem['submission_records']))
+
+        for i in range(records_to_show):
+            record = problem['submission_records'][i]
+            record_id = record.get('recordId', 'Unknown')
+            result_state = record.get('resultState', 'Unknown')
+            score = record.get('score', 0)
+            submission_time = record.get('submissionTime', 'Unknown')
+
+            # 根据结果状态添加表情
+            status_emoji = "❓"
+            if result_state == 'AC':
+                status_emoji = "✅"
+            elif result_state == 'WA':
+                status_emoji = "❌"
+            elif result_state == 'TLE':
+                status_emoji = "⏱️"
+            elif result_state == 'MLE':
+                status_emoji = "💾"
+            elif result_state == 'RE':
+                status_emoji = "💥"
+            elif result_state == 'CE':
+                status_emoji = "⚠️"
+
+            content += f"### 提交 {i + 1} ({submission_time}) {status_emoji}\n\n"
+            content += f"**记录ID:** {record_id}  \n"
+            content += f"**状态:** {result_state}  \n"
+            content += f"**分数:** {score}  \n"
+
+            # 添加代码（如果有）
+            if 'code' in record and record['code']:
+                content += "\n**提交代码:**\n\n"
+                for code_file_name, code in record['code'].items():
+                    # 根据文件扩展名确定语言
+                    lang = ""
+                    if code_file_name.endswith('.java'):
+                        lang = "java"
+                    elif code_file_name.endswith('.py'):
+                        lang = "python"
+                    elif code_file_name.endswith('.cpp') or code_file_name.endswith('.c'):
+                        lang = "cpp"
+                    content += f"**{code_file_name}**\n\n```{lang}\n{code}\n```\n\n"
+
+            # 如果不是最后一条记录，添加分隔线
+            if i < records_to_show - 1:
+                content += "---\n\n"
+
+    # 保存文件 - 直接在当前目录
+    try:
+        # 不创建子目录，直接在当前目录保存
+        with open(file_name, 'w', encoding='utf-8') as f:
+            f.write(content)
+
+        return file_name
+    except Exception as e:
+        print(f"[\x1b[0;31mx\x1b[0m] 保存题目文件时出错: {e}")
+        return None
 
 # 主函数
 def main():
@@ -590,31 +744,41 @@ def main():
             # 用户选择作业后，获取问题列表
             if selected_hw:
                 # 获取作业问题列表
-                print(f"\n[\x1b[0;36m!\x1b[0m] 获取作业ID{selected_hw}的问题列表...")
+                print(f"\n[\x1b[0;36m!\x1b[0m] 获取作业ID{selected_hw}的题目列表...")
                 problems_list = requester.get_homework_problems(selected_hw, selected_course)
 
                 if problems_list and 'list' in problems_list and problems_list['list']:
 
-                    # 定义函数以获取问题详细信息
+                    # 定义函数以获取题目详细信息
                     def fetch_problem_detail(problem):
                         """为单个问题获取详细信息的工作函数"""
                         problem_id = problem.get('problemId', 'Unknown')
-                        print(f"\r[\x1b[0;36m!\x1b[0m] 获取问题ID {problem_id} 的详情...", end="")
+
+                        # 获取问题详情
                         problem_info = requester.get_problem_info(problem_id, selected_hw, selected_course)
                         if problem_info:
                             problem['details'] = problem_info
                         else:
                             problem['details'] = {}
+
+                        # 获取提交记录
+                        submission_records = requester.get_problem_submission_records(problem_id, selected_hw,
+                                                                                      selected_course)
+                        if submission_records and 'list' in submission_records and len(submission_records['list']) > 0:
+                            problem['submission_records'] = submission_records['list']
+                        else:
+                            problem['submission_records'] = []
+
                         return problem
 
-                    # 使用多线程获取每个问题的详细信息
+                    # 使用多线程获取每个题目的详细信息
                     original_problems = problems_list['list']
                     problem_results = {}  # 使用字典存储结果，以保持顺序
 
                     max_workers = min(10, len(original_problems))  # 最多10个线程
 
                     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                        # 提交所有问题的详情请求到线程池，并记录原始索引
+                        # 提交所有题目的详情请求到线程池，并记录原始索引
                         futures = {}
                         for i, problem in enumerate(original_problems):
                             future = executor.submit(fetch_problem_detail, problem)
@@ -631,30 +795,63 @@ def main():
                                 index, problem_id = futures[future]
                                 problem_results[index] = problem
                                 completed += 1
-                                print(f"\r[\x1b[0;36m!\x1b[0m] 获取问题详情进度: {completed}/{total}", end="")
+                                print(f"\r[\x1b[0;36m!\x1b[0m] 获取题目详情进度: {completed}/{total}", end="")
                             except Exception as exc:
                                 index, problem_id = futures[future]
-                                print(f"\n[\x1b[0;31mx\x1b[0m] 获取问题 {problem_id} 详情时出错: {exc}")
+                                print(f"\n[\x1b[0;31mx\x1b[0m] 获取题目 {problem_id} 详情时出错: {exc}")
                                 # 保留原始信息但添加空的details字典
                                 problem = original_problems[index]
                                 problem['details'] = {}
                                 problem_results[index] = problem
 
-                    # 按原始顺序重建问题列表
+                    # 按原始顺序重建题目列表
                     enriched_problems = [problem_results[i] for i in range(len(original_problems))]
 
+                    # 修改问题列表显示部分
                     # 显示问题列表
                     print("\r[\x1b[0;32m+\x1b[0m] 请求成功，作业中的问题列表:")
 
                     # 定义表头
-                    print(" {:<2} | {:<25} | {:<10} | {:<15}".format(
-                        "No.", "Problem Name", "Difficulty", "Time Limit (ms)"
+                    print(" {:<2} | {:<25} | {:<5} | {:<10} | {:<15}".format(
+                        "No.", "Problem Name", "Status", "Difficulty", "Time Limit"
                     ))
-                    print("-" * 80)  # 固定长度的分隔线
+                    print("-" * 85)  # 增加分隔线长度
 
                     for i, problem in enumerate(enriched_problems):
                         problem_name = problem.get('problemName', 'Unknown')
                         details = problem.get('details', {})
+
+                        # 提取状态信息
+                        status = "Not Attempted"
+                        status_color = "\x1b[0;37m"  # 默认浅灰色
+
+                        if 'submission_records' in problem and problem['submission_records']:
+                            # 获取最新提交
+                            latest = problem['submission_records'][0]
+                            result_state = latest.get('resultState', '')
+
+                            if result_state == 'AC':
+                                status = "AC"
+                                status_color = "\x1b[0;32m"  # 绿色
+                            elif result_state == 'WA':
+                                status = "WA"
+                                status_color = "\x1b[0;31m"  # 红色
+                            elif result_state == 'RE':
+                                status = "RE"
+                                status_color = "\x1b[0;35m"  # 紫色
+                            elif result_state == 'CE':
+                                status = "CE"
+                                status_color = "\x1b[0;91m"  # 橙红色
+                            elif result_state == 'TLE':
+                                status = "TLE"
+                                status_color = "\x1b[0;91m"  # 橙红色
+                            elif result_state == 'MLE':
+                                status = "MLE"
+                                status_color = "\x1b[0;33m"  # 黄色
+                            else:
+                                status = result_state
+
+                        colored_status = f"{status_color}{status}\x1b[0m"
 
                         # 提取难度
                         difficulty = details.get('difficulty', 0)
@@ -664,11 +861,11 @@ def main():
                         # 提取时间限制
                         time_limit = "Unknown"
                         if 'timeLimit' in details and 'Java' in details['timeLimit']:
-                            time_limit = details['timeLimit']['Java']
+                            time_limit = f"{details['timeLimit']['Java']} ms"
 
                         # 基本格式，先不带颜色
-                        base_line = " {:<2}  | {:<25} | {:<10} | {:<15}".format(
-                            i + 1, problem_name, difficulty_text, time_limit
+                        base_line = " {:<2}  | {:<25} | {:<5} | {:<10} | {:<15}".format(
+                            i + 1, problem_name, status, difficulty_text, time_limit
                         )
 
                         # 根据难度添加颜色代码，但保持格式
@@ -687,13 +884,14 @@ def main():
 
                         # 构造包含颜色的行，使用固定位置替换文本
                         parts = base_line.split("|")
-                        parts[2] = " " + colored_diff + " " * (11 - len(difficulty_text))
+                        parts[2] = " " + colored_status + " " * (7 - len(status))  # 状态列
+                        parts[3] = " " + colored_diff + " " * (11 - len(difficulty_text))  # 难度列
 
                         colored_line = "|".join(parts)
                         print(colored_line)
 
-                    # 用户选择问题
-                    print("\n请选择要查看的问题编号(1-{0})，或输入0返回上一级:".format(len(enriched_problems)))
+                    # 用户选择题目
+                    print("\n请选择要查看的题目编号(1-{0})，或输入0返回上一级:".format(len(enriched_problems)))
                     problem_input = input().strip()
 
                     if problem_input == '0':
@@ -706,17 +904,17 @@ def main():
                             selected_problem = enriched_problems[problem_index]
                             problem_id = selected_problem['problemId']
 
-                            # 使用已获取的问题详情，不再重新请求
+                            # 使用已获取的题目详情，不再重新请求
                             problem_info = selected_problem.get('details', {})
 
                             if problem_info:
                                 print(f"\n{'-' * 80}")
-                                print(f"问题编号: {problem_index + 1}")
-                                print(f"问题名称: {selected_problem['problemName']}")
+                                print(f"题目编号: {problem_index + 1}")
+                                print(f"题目名称: {selected_problem['problemName']}")
 
-                                # 显示问题的其他信息，不显示内容
+                                # 显示题目的其他信息，不显示内容
                                 print(f"{'-' * 40}")
-                                print(f"问题类型: {problem_info.get('problemType', '未知')}")
+                                print(f"题目类型: {problem_info.get('problemType', '未知')}")
 
                                 # 显示时间限制
                                 if 'timeLimit' in problem_info:
@@ -737,7 +935,7 @@ def main():
                                 io_mode_text = "标准输入输出" if io_mode == 0 else "文件输入输出"
                                 print(f"IO模式: {io_mode_text}")
 
-                                # 显示难度 - 问题详情部分
+                                # 显示难度 - 题目详情部分
                                 difficulty = problem_info.get('difficulty', 0)
                                 difficulty_text = ["未知", "入门", "简单", "普通", "困难", "魔鬼"][min(difficulty, 5)]
                                 print(f"难度等级: {difficulty_text}")
@@ -746,27 +944,27 @@ def main():
                                 if 'publicTags' in problem_info and problem_info['publicTags']:
                                     print("公开标签:", ", ".join(problem_info['publicTags']))
 
-                                # 询问用户是否要查看题目内容
-                                print("\n是否查看题目内容? (y/n):")
-                                content_choice = input().strip().lower()
+                                # 询问用户是否要保存题目内容到本地
+                                print("\n是否将题目内容保存到本地? (y/n):", end='')
+                                save_choice = input().strip().lower()
 
-                                if content_choice == 'y':
-                                    print(f"\n{'-' * 40}")
-                                    print("题目内容:\n")
-                                    if 'content' in problem_info:
-                                        print(problem_info['content'])
+                                if not save_choice or save_choice == 'y':
+                                    print(f"[\x1b[0;36m!\x1b[0m] 正在保存题目内容到本地...")
+                                    file_path = save_problem_to_file(selected_problem, selected_course, selected_hw)
+                                    if file_path:
+                                        print(f"\r[\x1b[0;32m+\x1b[0m] 题目内容已保存到: {file_path}")
                                     else:
-                                        print("题目内容不可用")
+                                        print("[\x1b[0;31mx\x1b[0m] 题目内容保存失败")
 
                                 print(f"{'-' * 80}")
                             else:
-                                print("[\x1b[0;31mx\x1b[0m] 问题详情不可用")
+                                print("[\x1b[0;31mx\x1b[0m] 题目详情不可用")
                         else:
-                            print("[\x1b[0;31mx\x1b[0m] 无效的问题编号")
+                            print("[\x1b[0;31mx\x1b[0m] 无效的题目编号")
                     except ValueError:
                         print("[\x1b[0;31mx\x1b[0m] 请输入有效的数字")
                 else:
-                    print("[\x1b[0;31mx\x1b[0m] 获取问题列表失败或列表为空")
+                    print("[\x1b[0;31mx\x1b[0m] 获取题目列表失败或列表为空")
             else:
                 print("[\x1b[0;31mx\x1b[0m] 未选择有效的作业")
         else:
