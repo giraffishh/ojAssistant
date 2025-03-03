@@ -112,3 +112,12 @@ def save_problem_to_file(problem, course_id, homework_id):
     except Exception as e:
         print(f"[\x1b[0;31mx\x1b[0m] 保存题目文件时出错: {e}")
         return None
+
+def read_java_file(file_path):
+    """读取Java文件内容。"""
+    try:
+        with open(file_path, 'r', encoding='utf-8') as file:
+            return file.read()
+    except Exception as e:
+        print(f"[\x1b[0;31mx\x1b[0m] 读取文件错误: {e}")
+        return None

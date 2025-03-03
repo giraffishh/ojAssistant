@@ -1,5 +1,5 @@
 from services import OJRequester, handle_login, fetch_and_process_homeworks, fetch_and_process_problems
-from ui import display_courses, display_homeworks, display_problems_list, display_problems_info, select_course, select_homework
+from ui import display_courses, display_homeworks, display_problems_list, select_course, select_homework, interact_with_problems
 
 # 禁用SSL警告
 import urllib3
@@ -44,12 +44,7 @@ def main():
     if not enriched_problems:
         return  # 如果无法获取问题列表，退出程序
 
-    # 显示问题列表
-    if not display_problems_list(enriched_problems):
-        return  # 如果无法显示问题列表，退出程序
-
-    # 用户选择问题并查看详情，包括提交记录和保存选项
-    display_problems_info(enriched_problems, selected_course, selected_homework)
+    interact_with_problems(enriched_problems, selected_course, selected_homework, requester)
 
 if __name__ == "__main__":
     main()

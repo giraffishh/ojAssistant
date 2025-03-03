@@ -109,7 +109,7 @@ def display_problems_list(enriched_problems):
         return False
 
     # 显示问题列表
-    print("\r[\x1b[0;32m+\x1b[0m] 请求成功，作业中的题目列表:")
+    print("\r[\x1b[0;32m+\x1b[0m] 请求成功，当前作业中的题目列表:")
 
     # 定义表头 - 更新表头以包含状态列
     print(" {:<2} | {:<25} | {:<5} | {:<10} | {:<15}".format(
@@ -173,19 +173,23 @@ def display_problems_list(enriched_problems):
     return True
 
 
-def display_problems_info(enriched_problems, course_id, homework_id):
+def display_problems_info(enriched_problems, selected_course, selected_homework):
     """处理用户选择问题并展示详细信息，包括提交记录和保存选项
 
     Args:
         enriched_problems: 包含详细信息的问题列表
-        course_id: 课程ID，用于保存文件
-        homework_id: 作业ID，用于保存文件
+        selected_course: 选中的课程对象或课程ID
+        selected_homework: 选中的作业对象或作业ID
 
     Returns:
-        布尔值，表示操作是否成功
+        选择的问题对象，如果用户没有选择或退出则返回None
     """
     if not enriched_problems:
-        return False
+        return None
+
+    # 获取课程ID和作业ID（处理对象或直接ID两种情况）
+    course_id = selected_course['id'] if isinstance(selected_course, dict) else selected_course
+    homework_id = selected_homework['id'] if isinstance(selected_homework, dict) else selected_homework
 
     # 用户选择问题
     print("\n请选择要查看的题目编号(1-{0})，或输入0返回上一级:".format(len(enriched_problems)), end='')
@@ -193,7 +197,7 @@ def display_problems_info(enriched_problems, course_id, homework_id):
 
     if problem_input == '0':
         print("[\x1b[0;36m!\x1b[0m] 返回上一级...")
-        return False
+        return None
 
     try:
         problem_index = int(problem_input) - 1
@@ -250,7 +254,7 @@ def display_problems_info(enriched_problems, course_id, homework_id):
                     records = selected_problem['submission_records']
                     records_count = min(5, len(records))  # 最多显示5条记录
 
-                    print(f"[\x1b[0;32m+\x1b[0m] 最近 {records_count} 条提交记录:")
+                    print(f"\n[\x1b[0;32m+\x1b[0m] 最近 {records_count} 条提交记录:")
 
                     # 创建表头 - 使用与作业列表相同的风格
                     header = " {:<6} | {:<5} | {:<19} | {:<8}".format(
@@ -295,14 +299,84 @@ def display_problems_info(enriched_problems, course_id, homework_id):
                     else:
                         print("[\x1b[0;31mx\x1b[0m] 题目内容保存失败")
 
-                print(f"{'-' * 80}")
-                return True
+                print(f"{'-' * 60}")
+                return selected_problem  # 返回选择的问题对象
             else:
                 print("[\x1b[0;31mx\x1b[0m] 题目详情不可用")
-                return False
+                return None
         else:
             print("[\x1b[0;31mx\x1b[0m] 无效的题目编号")
-            return False
+            return None
     except ValueError:
         print("[\x1b[0;31mx\x1b[0m] 请输入有效的数字")
-        return False
+        return None
+
+
+def display_grading_result(result):
+    """显示批改结果，以表格形式展示
+
+    Args:
+        result: 批改结果数据
+
+    Returns:
+        无返回值
+    """
+    from utils.formatters import records_status_color
+
+    # 批改完成，显示结果
+    print(f"\n{'-' * 60}")
+    print(f"批改结果 - 提交ID: {result.get('recordId', '')}")
+
+    # 显示基本信息
+    status, status_color = records_status_color(result['resultState'])
+    print(f"题目: {result['problemName']}")
+    print(f"状态: {status_color}{result['resultState']}\x1b[0m")
+    print(f"得分: {result['score']}")
+    print(f"提交时间: {result['submissionTime']}")
+    print(f"{'-' * 60}")
+
+    # 显示详细结果 - 表格形式
+    print("\n[\x1b[0;36m!\x1b[0m]测试用例结果:")
+
+    # 表头
+    header = " {:<3} | {:<6} | {:<15} | {:<8} | {:<10} | {:<25}".format(
+        "No.", "Status", "Test Case", "Time(ms)", "Memory(MB)", "Message"
+    )
+    print(header)
+    print("-" * 80)
+
+    # 表格内容
+    for idx, test_result in enumerate(result['resultList']):
+        status = test_result['state']
+        title = test_result['title']
+        time_used = test_result['time']
+        memory_used = test_result['memory']
+        message = test_result['message'] if test_result['message'] else "N/A"
+
+        # 根据状态设置颜色
+        _, status_color = records_status_color(status)
+        status_colored = f"{status_color}{status}\x1b[0m"
+
+        # 使用表格格式输出
+        row = " {:<3} | {:<6} | {:<15} | {:<8} | {:<10} | {:<25}".format(
+            idx + 1,
+            status,  # 普通文本版本(用于对齐)
+            title,
+            time_used,
+            memory_used,
+            message[:10] + ('...' if len(message) > 25 else '')
+        )
+
+        # 替换状态文本为彩色版本
+        row = row.replace(status, status_colored, 1)
+
+        print(row)
+
+    # 如果有消息太长，显示完整版本
+    for idx, test_result in enumerate(result['resultList']):
+        message = test_result['message']
+        if len(message) > 10:
+            print(f"\n测试用例 {idx + 1} 完整消息:")
+            print(f"{message}")
+
+    print(f"{'-' * 80}")

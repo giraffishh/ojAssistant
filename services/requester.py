@@ -456,3 +456,121 @@ class OJRequester:
         else:
             print(f"[\x1b[0;31mx\x1b[0m] 请求失败，HTTP状态码: {response.status_code}")
             return False
+
+    def submit_homework(self, homework_id, problem_id, course_id, file_path):
+        """提交Java作业到OJ平台"""
+        # 检查CSRF令牌是否存在
+        if not self.csrf_token:
+            print("[\x1b[0;31mx\x1b[0m] 没有CSRF令牌，无法发送提交请求")
+            return False
+
+        # 导入必要的库
+        from utils.file_handlers import read_java_file
+
+        # 读取Java文件
+        print(f"[\x1b[0;36m!\x1b[0m] 读取Java文件中...")
+        java_content = read_java_file(file_path)
+        if not java_content:
+            print("[\x1b[0;31mx\x1b[0m] 无法读取Java文件")
+            return None
+
+        # 提取不带扩展名的文件名
+        file_name = os.path.splitext(os.path.basename(file_path))[0]
+
+        # 准备files JSON结构
+        files_dict = {file_name: java_content}
+        files_json = json.dumps(files_dict)
+
+        # 准备API URL
+        url = f"{self.base_url}/api/homework/submit/objective/"
+
+        # 设置请求头
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': self.csrf_token,
+            'Referer': f"{self.base_url}/course/{course_id}/homework/{homework_id}",
+            'Origin': self.base_url,
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-origin'
+        }
+
+        # 设置请求数据
+        data = {
+            'homeworkId': homework_id,
+            'problemId': problem_id,
+            'courseId': course_id,
+            'language': '2',  # 2 代表Java
+            'subGroup': 'false',
+            'files': files_json
+        }
+
+        # 发送请求
+        print(f"[\x1b[0;36m!\x1b[0m] 正在提交Java作业...")
+        response = self.session.post(url, headers=headers, data=data, verify=False)
+
+        if response.status_code == 200:
+            try:
+                result = response.json()
+                if 'recordId' in result:
+                    print(f"[\x1b[0;32m+\x1b[0m] 提交成功！记录ID: {result.get('recordId')}")
+                    return result
+                else:
+                    print("[\x1b[0;31mx\x1b[0m] 提交响应缺少recordId")
+                    return None
+            except json.JSONDecodeError:
+                print("[\x1b[0;31mx\x1b[0m] 响应不是JSON格式")
+                return None
+        else:
+            print(f"[\x1b[0;31mx\x1b[0m] 提交请求失败，HTTP状态码: {response.status_code}")
+            print(response.text)
+            return None
+
+    def get_submission_result(self, record_id, course_id, homework_id):
+        """获取提交记录的批改结果
+
+        Args:
+            record_id: 提交记录ID
+            course_id: 课程ID
+            homework_id: 作业ID
+
+        Returns:
+            批改结果的JSON数据，如果请求失败则返回None
+        """
+        if not self.csrf_token:
+            print("[\x1b[0;31mx\x1b[0m] 没有CSRF令牌，无法发送请求")
+            return None
+
+        url = f"{self.base_url}/api/record/result/"
+
+        # 设置请求头
+        headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'X-CSRFToken': self.csrf_token,
+            'Referer': f"{self.base_url}/course/{course_id}/homework/{homework_id}/record/{record_id}",
+            'Origin': self.base_url,
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-origin'
+        }
+
+        # 设置请求数据
+        data = {
+            'recordId': record_id,
+            'courseId': course_id,
+            'homeworkId': homework_id
+        }
+
+        # 发送请求
+        response = self.session.post(url, headers=headers, data=data, verify=False)
+
+        if response.status_code == 200:
+            try:
+                result = response.json()
+                return result
+            except json.JSONDecodeError:
+                print("[\x1b[0;31mx\x1b[0m] 响应不是JSON格式")
+                return None
+        else:
+            print(f"[\x1b[0;31mx\x1b[0m] 请求失败，HTTP状态码: {response.status_code}")
+            return None

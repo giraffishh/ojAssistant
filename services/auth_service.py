@@ -9,6 +9,8 @@ def handle_login(requester):
         if requester.check_cookies_status():
             login_successful = True
             print("[\x1b[0;32m+\x1b[0m] 使用本地cookies登录成功")
+        else:
+            requester.clear_session()
 
     # 如果cookies无效或未找到，执行新的登录
     if not login_successful:

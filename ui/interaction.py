@@ -71,3 +71,58 @@ def select_homework(enriched_homeworks):
         except ValueError:
             print("[\x1b[0;31mx\x1b[0m] 无效的输入，请输入数字ID")
             return None
+
+
+def interact_with_problems(enriched_problems, selected_course, selected_homework, requester):
+    """处理用户与问题的交互，包括查看详情和提交作业
+
+    Args:
+        enriched_problems: 包含详细信息的问题列表
+        selected_course: 选中的课程对象或课程ID
+        selected_homework: 选中的作业对象或作业ID
+        requester: OJ请求实例
+
+    Returns:
+        无返回值
+    """
+    from ui.display import display_problems_info, display_problems_list
+    from ui.submission import handle_submission
+
+    # 获取课程ID和作业ID（处理对象或直接ID两种情况）
+    course_id = selected_course['id'] if isinstance(selected_course, dict) else selected_course
+    homework_id = selected_homework['id'] if isinstance(selected_homework, dict) else selected_homework
+
+    while True:
+        # 每次循环都显示问题列表，确保用户有最新的状态视图
+        display_problems_list(enriched_problems)
+
+        # 用户选择问题并查看详情
+        selected_problem = display_problems_info(enriched_problems, selected_course, selected_homework)
+
+        # 如果用户没有选择问题或返回上一级
+        if not selected_problem:
+            break
+
+        # 询问是否要提交作业
+        print("\n是否提交Java作业文件? (y/n):", end='')
+        submit_choice = input().strip().lower()
+
+        if submit_choice == 'y':
+            print(f"[\x1b[0;36m!\x1b[0m] 准备提交作业...")
+            handle_submission(requester, selected_problem, course_id, homework_id)
+
+            # 提交后重新获取问题列表和记录，以显示最新状态
+            print(f"[\x1b[0;36m!\x1b[0m] 正在刷新题目状态...")
+
+            # 重新获取问题列表和提交记录
+            from services import fetch_and_process_problems
+            updated_problems = fetch_and_process_problems(requester, selected_homework, selected_course)
+            if updated_problems:
+                enriched_problems = updated_problems
+                print(f"[\x1b[0;32m+\x1b[0m] 题目状态已更新")
+
+        # 询问是否继续查看其他题目
+        print("\n是否继续查看其他题目? (y/n):", end='')
+        continue_choice = input().strip().lower()
+        if continue_choice != 'y':
+            break
