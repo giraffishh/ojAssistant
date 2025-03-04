@@ -1,5 +1,6 @@
 from services import OJRequester, handle_login, fetch_and_process_homeworks, fetch_and_process_problems
 from ui import display_courses, display_homeworks, select_course, select_homework, interact_with_problems
+from config import AUTO_SELECT_COURSE
 
 # 禁用SSL警告
 import urllib3
@@ -20,7 +21,7 @@ def main():
         return  # 如果无法获取课程列表，退出程序
 
     # 选择课程
-    selected_course = select_course(courses, auto_select_first=True)
+    selected_course = select_course(courses, auto_select_first=AUTO_SELECT_COURSE)
     if not selected_course:
         return  # 如果无法选择课程，退出程序
 

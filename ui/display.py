@@ -48,6 +48,7 @@ def display_homeworks(enriched_homeworks):
 
         # 初始默认值
         status = "Unknown"
+        status_color = ""
         completion = "0%"
         score = "0/0"
 
@@ -55,19 +56,24 @@ def display_homeworks(enriched_homeworks):
         # state: 1=未开始, 2=进行中, 3=已截止, 4=已完成
         state = hw.get('state', 0)
         if state == 1:
-            status = "\x1b[0;33mPending\x1b[0m"
+            status = "Pending"
+            status_color = "\x1b[0;33m"
         elif state == 2:
-            status = "\x1b[0;36mActive\x1b[0m"
+            status = "Active"
+            status_color = "\x1b[0;36m"
         elif state == 3:
-            status = "\x1b[0;31mClosed\x1b[0m"
+            status = "Closed"
+            status_color = "\x1b[0;31m"
         elif state == 4:
-            status = "\x1b[0;32mFinished\x1b[0m"
+            status = "Finished"
+            status_color = "\x1b[0;32m"
 
         # 判断截止时间
         if due_date != 'No Due Date':
             due_datetime = datetime.strptime(due_date, '%Y-%m-%d %H:%M:%S')
             if now > due_datetime and state == 2:
-                status = "\x1b[0;31mExpired\x1b[0m"
+                status = "Expired"
+                status_color = "\x1b[0;31m"
 
         # 从详细信息中提取完成度和得分
         if 'details' in hw and hw['details']:
@@ -86,12 +92,22 @@ def display_homeworks(enriched_homeworks):
 
                 # 如果分数是满分，更新状态
                 if current == total and total > 0:
-                    status = "\x1b[0;32mComplete\x1b[0m"
+                    status = "Complete"
+                    status_color = "\x1b[0;32m"
 
-        # 输出格式化的作业信息行，保证对齐
-        print("  {:<3} | {:<15} | {:<8} | {:<8} | {:<10} | {:<7} | {:<21}".format(
+        # 将状态文本转换为带颜色的版本
+        colored_status = f"{status_color}{status}\x1b[0m" if status_color else status
+
+        # 先输出格式化的行，不带颜色（用于正确对齐）
+        row = "  {:<3} | {:<15} | {:<8} | {:<8} | {:<10} | {:<7} | {:<21}".format(
             hw_id, hw_name, status, problems_count, completion, score, due_date
-        ))
+        )
+
+        # 替换状态文本为彩色版本
+        if status_color:
+            row = row.replace(status, colored_status, 1)
+
+        print(row)
 
     return True
 
@@ -112,7 +128,7 @@ def display_problems_list(enriched_problems):
     print("\r[\x1b[0;32m+\x1b[0m] 当前作业中的题目列表:")
 
     # 定义表头 - 更新表头以包含状态列
-    print(" {:<2} | {:<25} | {:<5} | {:<10} | {:<15}".format(
+    print(" {:<2} | {:<25} | {:<13} | {:<10} | {:<15}".format(
         "No.", "Problem Name", "Status", "Difficulty", "Time Limit"
     ))
     print("-" * 70)  # 增加分隔线长度
@@ -144,7 +160,7 @@ def display_problems_list(enriched_problems):
             time_limit = f"{details['timeLimit']['Java']} ms"
 
         # 基本格式，先不带颜色
-        base_line = " {:<2}  | {:<25} | {:<5} | {:<10} | {:<15}".format(
+        base_line = " {:<2}  | {:<25} | {:<13} | {:<10} | {:<15}".format(
             i + 1, problem_name, status, difficulty_text, time_limit
         )
 
@@ -164,7 +180,7 @@ def display_problems_list(enriched_problems):
 
         # 构造包含颜色的行，使用固定位置替换文本
         parts = base_line.split("|")
-        parts[2] = " " + colored_status + " " * (7 - len(status))  # 状态列
+        parts[2] = " " + colored_status + " " * (14 - len(status))  # 状态列
         parts[3] = " " + colored_diff + " " * (11 - len(difficulty_text))  # 难度列
 
         colored_line = "|".join(parts)
@@ -239,8 +255,24 @@ def display_problems_info(enriched_problems, selected_course, selected_homework)
 
                 # 显示难度 - 题目详情部分
                 difficulty = problem_info.get('difficulty', 0)
-                difficulty_text = ["未知", "入门", "简单", "普通", "困难", "魔鬼"][min(difficulty, 5)]
-                print(f"难度等级: {difficulty_text}")
+                difficulty_levels = ["未知", "入门", "简单", "普通", "困难", "魔鬼"]
+                difficulty_text = difficulty_levels[min(difficulty, 5)]
+
+                # 创建彩色难度文本
+                difficulty_color = ""
+                if difficulty == 1:
+                    difficulty_color = "\x1b[0;36m"  # 青色 - 入门
+                elif difficulty == 2:
+                    difficulty_color = "\x1b[0;32m"  # 绿色 - 简单
+                elif difficulty == 3:
+                    difficulty_color = "\x1b[0;33m"  # 黄色 - 普通
+                elif difficulty == 4:
+                    difficulty_color = "\x1b[0;31m"  # 红色 - 困难
+                elif difficulty == 5:
+                    difficulty_color = "\x1b[0;35m"  # 紫色 - 魔鬼
+
+                colored_difficulty = f"{difficulty_color}{difficulty_text}\x1b[0m" if difficulty_color else difficulty_text
+                print(f"难度等级: {colored_difficulty}")
 
                 # 显示标签
                 if 'publicTags' in problem_info and problem_info['publicTags']:
@@ -271,23 +303,23 @@ def display_problems_info(enriched_problems, selected_course, selected_homework)
                         submission_time = record.get('submissionTime', 'Unknown')
                         record_id = record.get('recordId', 'Unknown')
 
-                        # 获取状态的颜色文本
-                        result_colored = f"{records_status_color(result_state)[1]}{result_state}\x1b[0m"
+                        # 获取状态的颜色和文本，但先不合并
+                        status, status_color = records_status_color(result_state)
+                        colored_status = f"{status_color}{status}\x1b[0m" if status_color else status
 
-                        # 使用与作业列表相同的格式化方式
+                        # 先创建没有颜色的行用于对齐
                         line = " {:<6} | {:<5} | {:<19} | {:<8}".format(
-                            result_state, score, submission_time, record_id
+                            status, score, submission_time, record_id
                         )
 
-                        # 使用替换的方式，将普通状态文本替换为带颜色的文本
-                        # 这样不会影响原始格式和对齐
-                        line = line.replace(result_state, result_colored, 1)
+                        # 替换普通状态文本为带颜色的文本
+                        if status_color:
+                            line = line.replace(status, colored_status, 1)
 
                         print(line)
                 else:
                     print("[\x1b[0;33m!\x1b[0m] 没有找到提交记录")
 
-                print(f"{'-' * 60}")
                 return selected_problem  # 返回选择的问题对象
             else:
                 print("[\x1b[0;31mx\x1b[0m] 题目详情不可用")
@@ -298,7 +330,6 @@ def display_problems_info(enriched_problems, selected_course, selected_homework)
     except ValueError:
         print("[\x1b[0;31mx\x1b[0m] 请输入有效的数字")
         return None
-
 
 def display_grading_result(result):
     """显示批改结果，以表格形式展示

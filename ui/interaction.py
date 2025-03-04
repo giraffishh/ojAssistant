@@ -19,19 +19,17 @@ def select_course(courses, auto_select_first=True):
 
     # 如果需要手动选择课程，可以在这里扩展代码
     # 例如：让用户输入课程编号
-    print("\n请输入要查看的课程序号(1-{})，或直接回车选择第一门课程:".format(len(courses['list'])))
+    print("\n请输入要查看的课程序号(1-{})，或直接回车选择最后一门课程:".format(len(courses['list'])),end='')
     user_input = input().strip()
 
     if not user_input:  # 用户直接按回车
-        selected_course = courses['list'][0]['course_id']
-        print(f"\n[\x1b[0;36m!\x1b[0m] 选择第一门课程: {courses['list'][0]['course_name']} [{selected_course}]")
+        selected_course = courses['list'][len(courses['list'])-1]['course_id']
         return selected_course
 
     try:
         index = int(user_input) - 1
         if 0 <= index < len(courses['list']):
             selected_course = courses['list'][index]['course_id']
-            print(f"\n[\x1b[0;36m!\x1b[0m] 已选择课程: {courses['list'][index]['course_name']} [{selected_course}]")
             return selected_course
         else:
             print("[\x1b[0;31mx\x1b[0m] 无效的课程序号")
