@@ -1,3 +1,5 @@
+from config import WORK_DIRECTORY
+
 def save_problem_to_file(problem, course_id, homework_id):
     """将题目内容保存为文件"""
     problem_id = problem.get('problemId', 'unknown')
@@ -105,10 +107,11 @@ def save_problem_to_file(problem, course_id, homework_id):
     # 保存文件 - 直接在当前目录
     try:
         # 不创建子目录，直接在当前目录保存
-        with open(file_name, 'w', encoding='utf-8') as f:
+        file_path = WORK_DIRECTORY + '\\' + file_name
+        with open(file_path, 'w', encoding='utf-8') as f:
             f.write(content)
 
-        return file_name
+        return file_path
     except Exception as e:
         print(f"[\x1b[0;31mx\x1b[0m] 保存题目文件时出错: {e}")
         return None

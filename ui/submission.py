@@ -3,6 +3,8 @@ import sys
 import time
 import hashlib
 
+from config import WORK_DIRECTORY
+
 
 def get_file_hash(content=None, file_path=None):
     """
@@ -220,11 +222,23 @@ def wait_and_show_grading_result(requester, record_id, course_id, homework_id, p
 def get_java_file_path():
     """获取Java文件路径"""
     while True:
-        file_path = input("请输入Java文件路径（输入'q'退出）: ")
+        file_path = input("请输入Java文件路径或文件名（输入'q'退出）: ")
 
         if file_path.lower() == 'q':
             print("[\x1b[0;33m!\x1b[0m] 已取消提交")
             return None
+
+        # 如果是完整路径，直接检查文件是否存在
+        if os.path.isabs(file_path) and os.path.exists(file_path):
+            return file_path
+
+        # 如果输入不是完整路径，而只是文件名，则在工作目录中查找
+        elif WORK_DIRECTORY and not os.path.dirname(file_path):
+            possible_path = os.path.join(WORK_DIRECTORY, file_path)
+            if os.path.exists(possible_path):
+                print(f"[\x1b[0;32m+\x1b[0m] 在工作目录中找到文件: {possible_path}")
+                file_path = possible_path
+                return file_path
 
         if not os.path.exists(file_path):
             print("[\x1b[0;31mx\x1b[0m] 找不到文件，请重试。")
@@ -233,5 +247,3 @@ def get_java_file_path():
         if not file_path.lower().endswith('.java'):
             print("[\x1b[0;31mx\x1b[0m] 请选择Java文件（.java）")
             continue
-
-        return file_path
