@@ -109,7 +109,7 @@ def display_problems_list(enriched_problems):
         return False
 
     # 显示问题列表
-    print("\r[\x1b[0;32m+\x1b[0m] 请求成功，当前作业中的题目列表:")
+    print("\r[\x1b[0;32m+\x1b[0m] 当前作业中的题目列表:")
 
     # 定义表头 - 更新表头以包含状态列
     print(" {:<2} | {:<25} | {:<5} | {:<10} | {:<15}".format(
@@ -246,7 +246,7 @@ def display_problems_info(enriched_problems, selected_course, selected_homework)
                 if 'publicTags' in problem_info and problem_info['publicTags']:
                     print("公开标签:", ", ".join(problem_info['publicTags']))
 
-                # 显示提交记录 - 这部分从原代码直接集成过来
+                # 显示提交记录
                 print(f"{'-' * 40}")
 
                 # 使用已经获取的提交记录
@@ -261,7 +261,7 @@ def display_problems_info(enriched_problems, selected_course, selected_homework)
                         "Status", "Score", "Submit Time", "Record ID"
                     )
                     print(header)
-                    print("-" * len(header))  # 分隔线长度与表头一致
+                    print("-" * 60)  # 分隔线长度与表头一致
 
                     # 显示记录
                     for i in range(records_count):
@@ -286,18 +286,6 @@ def display_problems_info(enriched_problems, selected_course, selected_homework)
                         print(line)
                 else:
                     print("[\x1b[0;33m!\x1b[0m] 没有找到提交记录")
-
-                # 询问用户是否要保存题目内容到本地
-                print("\n是否将题目内容保存到本地? (y/n):", end='')
-                save_choice = input().strip().lower()
-
-                if not save_choice or save_choice == 'y':
-                    print(f"[\x1b[0;36m!\x1b[0m] 正在保存题目内容到本地...")
-                    file_path = save_problem_to_file(selected_problem, course_id, homework_id)
-                    if file_path:
-                        print(f"[\x1b[0;32m+\x1b[0m] 题目内容已保存到: {file_path}")
-                    else:
-                        print("[\x1b[0;31mx\x1b[0m] 题目内容保存失败")
 
                 print(f"{'-' * 60}")
                 return selected_problem  # 返回选择的问题对象
@@ -324,7 +312,7 @@ def display_grading_result(result):
     from utils.formatters import records_status_color
 
     # 批改完成，显示结果
-    print(f"\n{'-' * 60}")
+    print(f"\n\n{'-' * 60}")
     print(f"批改结果 - 提交ID: {result.get('recordId', '')}")
 
     # 显示基本信息

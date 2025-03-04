@@ -53,7 +53,7 @@ def select_homework(enriched_homeworks):
         return None
 
     # 用户输入作业ID
-    print("\n请输入要查看的作业ID(直接回车查看最近作业):", end='')
+    print("\n请输入要查看的作业ID(直接回车默认查看最近作业):", end='')
     user_input = input().strip()
 
     # 如果用户没有输入，选择第一个作业（最近的）
@@ -83,17 +83,17 @@ def interact_with_problems(enriched_problems, selected_course, selected_homework
         requester: OJ请求实例
 
     Returns:
-        无返回值
+        bool: True表示成功处理，False表示应该返回上一级
     """
     from ui.display import display_problems_info, display_problems_list
     from ui.submission import handle_submission
+    from utils.file_handlers import save_problem_to_file
 
     # 获取课程ID和作业ID（处理对象或直接ID两种情况）
     course_id = selected_course['id'] if isinstance(selected_course, dict) else selected_course
     homework_id = selected_homework['id'] if isinstance(selected_homework, dict) else selected_homework
 
     while True:
-        # 每次循环都显示问题列表，确保用户有最新的状态视图
         display_problems_list(enriched_problems)
 
         # 用户选择问题并查看详情
@@ -101,28 +101,57 @@ def interact_with_problems(enriched_problems, selected_course, selected_homework
 
         # 如果用户没有选择问题或返回上一级
         if not selected_problem:
-            break
+            return False  # 明确返回False，表示应返回上一级
 
-        # 询问是否要提交作业
-        print("\n是否提交Java作业文件? (y/n):", end='')
-        submit_choice = input().strip().lower()
+        # 当用户选择了题目后，给出选项
+        while True:
+            print("\n请选择操作: (直接回车默认选项为提交作业）")
+            print("1. 保存题目到本地")
+            print("2. 提交作业")
+            print("0. 返回题目列表")
 
-        if submit_choice == 'y':
-            print(f"[\x1b[0;36m!\x1b[0m] 准备提交作业...")
-            handle_submission(requester, selected_problem, course_id, homework_id)
+            choice = input("请输入选项编号: ").strip() or '2'
 
-            # 提交后重新获取问题列表和记录，以显示最新状态
-            print(f"[\x1b[0;36m!\x1b[0m] 正在刷新题目状态...")
+            if choice == '0':
+                # 返回题目列表
+                break
 
-            # 重新获取问题列表和提交记录
-            from services import fetch_and_process_problems
-            updated_problems = fetch_and_process_problems(requester, selected_homework, selected_course)
-            if updated_problems:
-                enriched_problems = updated_problems
-                print(f"[\x1b[0;32m+\x1b[0m] 题目状态已更新")
+            elif choice == '1':
+                # 保存题目到本地
+                print(f"[\x1b[0;36m!\x1b[0m] 正在保存题目内容到本地...")
+                file_path = save_problem_to_file(selected_problem, course_id, homework_id)
+                if file_path:
+                    print(f"[\x1b[0;32m+\x1b[0m] 题目内容已保存到: {file_path}")
+                else:
+                    print("[\x1b[0;31mx\x1b[0m] 题目内容保存失败")
 
-        # 询问是否继续查看其他题目
-        print("\n是否继续查看其他题目? (y/n):", end='')
-        continue_choice = input().strip().lower()
-        if continue_choice != 'y':
-            break
+                # 保存后继续显示选项
+                continue
+
+            elif choice == '2':
+                # 提交作业
+                print(f"[\x1b[0;36m!\x1b[0m] 准备提交作业...")
+                result = handle_submission(requester, selected_problem, course_id, homework_id)
+
+                # 只有当提交没有取消时才刷新题目状态
+                if result:
+                    # 重新获取问题列表和记录，以显示最新状态
+                    print(f"[\x1b[0;36m!\x1b[0m] 正在刷新题目状态...")
+                    from services import fetch_and_process_problems
+                    updated_problems = fetch_and_process_problems(requester, selected_homework, selected_course)
+                    if updated_problems:
+                        enriched_problems = updated_problems
+                        print(f"[\x1b[0;32m+\x1b[0m] 题目状态已更新")
+
+                    # 检查提交结果
+                    if isinstance(result, dict) and result.get('all_correct', False):
+                        # 如果全部正确，返回题目列表
+                        print(f"[\x1b[0;32m+\x1b[0m] 恭喜！该题目已全部通过，返回题目列表")
+                        break
+                    else:
+                        # 如果不全对，继续显示选项
+                        print(f"[\x1b[0;33m!\x1b[0m] 题目未完全通过，继续尝试")
+                        continue
+
+            else:
+                print("[\x1b[0;31mx\x1b[0m] 无效的选项，请重新选择")
