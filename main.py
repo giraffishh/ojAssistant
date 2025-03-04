@@ -1,5 +1,5 @@
 from services import OJRequester, handle_login, fetch_and_process_homeworks, fetch_and_process_problems
-from ui import display_courses, display_homeworks, display_problems_list, select_course, select_homework, interact_with_problems
+from ui import display_courses, display_homeworks, select_course, select_homework, interact_with_problems
 
 # 禁用SSL警告
 import urllib3

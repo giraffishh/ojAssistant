@@ -95,19 +95,18 @@ def handle_submission(requester, problem, course_id, homework_id):
     last_submission_time = None
     last_record_id = None
 
-    if 'submission_records' in problem and problem['submission_records']:
-        # 获取最近一次提交记录
-        for record in problem['submission_records']:
-            if 'code' in record and record['code']:
-                # 找到Java文件的代码
-                for code_file, code_content in record['code'].items():
-                    if code_file.endswith('.java'):
-                        last_submitted_code = code_content
-                        last_submission_time = record.get('submissionTime', 'Unknown')
-                        last_record_id = record.get('recordId', 'Unknown')
-                        break
-                if last_submitted_code:
-                    break  # 找到代码后跳出循环
+    if 'submission_records' in problem and problem['submission_records'] and len(problem['submission_records']) > 0:
+        # 只获取最近一次提交记录
+        latest_record = problem['submission_records'][0]  # 假设记录是按时间排序的，最新的在前面
+
+        if 'code' in latest_record and latest_record['code']:
+            # 找到Java文件的代码
+            for code_file, code_content in latest_record['code'].items():
+                if code_file.endswith('.java'):
+                    last_submitted_code = code_content
+                    last_submission_time = latest_record.get('submissionTime', 'Unknown')
+                    last_record_id = latest_record.get('recordId', 'Unknown')
+                    break
 
     # 如果找到上次提交的代码，计算它的哈希并比较
     if last_submitted_code:
@@ -118,7 +117,7 @@ def handle_submission(requester, problem, course_id, homework_id):
             print(f"上次提交时间: {last_submission_time}")
             print(f"上次提交ID: {last_record_id}")
             print(f"当前文件: {file_path}")
-            print(f"[\x1b[0;31mx\x1b[0m] 提交已取消\n")
+            print(f"[\x1b[0;31mx\x1b[0m] 提交已取消")
             return False
 
     # 确认提交
