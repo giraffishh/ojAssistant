@@ -33,21 +33,37 @@ ojAssistant/
 * 便捷上传作业到Jcoder
 
 **TodoList:**
-* 获取题目对应的Junit单元测试模拟OJ进行代码测试
+* 获取题目对应的经检验的Junit单元测试模拟OJ进行代码测试
 
 
 ### 🎨 开始使用
 需要在`config.py`中添加你的CAS账号和密码用于登录OJ
 
-项目依赖`Python`和`requests`库
+项目只依赖`Python`和`requests`库
 ```bash
 pip install requests
 ```
 在你工作的IDE中新建一个终端
 ```bash
 cd ./ojAssistant  # 切换到脚本所在目录
-python main.py
+python main.py  #启动脚本
 ```
+想要更加便捷地使用可以在PowerShell`$PROFILE`中添加函数
+```
+function oja {
+	python "填入存放脚本主函数的绝对路径如C:\\ojAssistant\main.py"
+}
+```
+文件保存为`Microsoft.PowerShell_profile.ps1`
+
+放在以下路径中`C:\Users\你的用户名\Documents\PowerShell\Microsoft.PowerShell_profile.ps1`
+
+然后刷新`$PROFILE`并重启终端
+```bash
+. $PROFILE
+```
+
+然后在终端中只需输入`oja`即可启动脚本
 
 >更多相关设置配置见`config.py`
 
