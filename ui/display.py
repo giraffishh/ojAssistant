@@ -284,7 +284,8 @@ def display_problems_info(enriched_problems, selected_course, selected_homework)
                 # 使用已经获取的提交记录
                 if 'submission_records' in selected_problem and selected_problem['submission_records']:
                     records = selected_problem['submission_records']
-                    records_count = min(5, len(records))  # 最多显示5条记录
+                    from config import MAX_RECORDS_TO_SHOW
+                    records_count = min(MAX_RECORDS_TO_SHOW, len(records))  # 最多显示5条记录
 
                     print(f"\n[\x1b[0;32m+\x1b[0m] 最近 {records_count} 条提交记录:")
 

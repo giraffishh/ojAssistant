@@ -1,4 +1,8 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import os
+import re
+import requests
+from urllib.parse import quote
 
 def fetch_and_process_homeworks(requester, course_id):
     """获取、排序和丰富作业数据
@@ -131,3 +135,63 @@ def fetch_and_process_problems(requester, homework_id, course_id):
     print("\r" + " " * 50 + "\r", end="")  # 清除进度显示
 
     return enriched_problems
+
+
+def download_unit_test_file(course_code, problem_id, homework_id, problem_name):
+    """
+    下载单元测试文件
+
+    Args:
+        course_code: 课程代码，如 'CS109-25S'
+        problem_id: 题目ID
+        homework_id: 作业ID
+        problem_name: 题目名称
+
+    Returns:
+        (bool, str): 第一个元素表示是否成功，第二个元素为文件路径或错误消息
+    """
+    # 基础URL，作者把单元测试文件放在了自费的阿里云OSS上
+    base_url = "https://hexo-blog-netlify.oss-cn-shenzhen.aliyuncs.com/junittest"
+
+    # 构造文件名，格式: "{problem_id}_{problem_name}.java"
+    file_name = f"MainTest.java"
+
+    # 构造URL
+    url = f"{base_url}/{course_code}/{homework_id}/{problem_id}_{quote(problem_name)}/MainTest.java"
+
+
+    # 保存路径
+    from config import WORK_DIRECTORY
+    save_path = os.path.join(WORK_DIRECTORY, file_name)
+
+    # 下载文件
+    try:
+        response = requests.get(url, verify=False, timeout=10)
+
+        if response.status_code == 200:
+            # 检查是否为XML错误响应
+            if response.text.strip().startswith('<?xml') and '<Error>' in response.text:
+                print(f"[\x1b[0;33m!\x1b[0m] 服务器返回错误:")
+                if '<Message>' in response.text:
+                    message = re.search(r'<Message>(.*?)</Message>', response.text)
+                    if message:
+                        print(f"[\x1b[0;33m!\x1b[0m] {message.group(1)}")
+
+                if '<Key>' in response.text:
+                    key = re.search(r'<Key>(.*?)</Key>', response.text)
+                    if key:
+                        print(f"[\x1b[0;33m!\x1b[0m] 请求的文件: {key.group(1)}")
+
+                return False, "[\x1b[0;33m!\x1b[0m]该题目暂无单元测试文件"
+
+            # 正常响应，保存文件
+            with open(save_path, 'wb') as file:
+                file.write(response.content)
+            return True, save_path
+        elif response.status_code == 404:
+            return False, "该题目暂无单元测试文件，你可以通过Pull Requests贡献单元测试到Github中，谢谢合作"
+        else:
+            return False, f"HTTP状态码: {response.status_code}"
+
+    except Exception as e:
+        return False, f"[\x1b[0;33m!\x1b[0m]下载异常: {str(e)}"

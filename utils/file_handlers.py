@@ -7,7 +7,7 @@ def save_problem_to_file(problem, course_id, homework_id):
     details = problem.get('details', {})
 
     # 创建文件名 - 直接在当前目录下保存
-    file_name = f"{homework_id}_{problem_id}_{problem_name}.md"
+    file_name = f"{course_id}_{homework_id}_{problem_id}_{problem_name}.md"
 
     # 创建一个markdown格式的内容
     content = f"# {problem_name}\n\n"

@@ -106,6 +106,7 @@ def interact_with_problems(enriched_problems, selected_course, selected_homework
             print("\n请选择操作: (直接回车默认选项为提交作业）")
             print("1. 保存题目到本地")
             print("2. 提交作业")
+            print("3. 下载单元测试文件")
             print("0. 返回题目列表")
 
             choice = input("请输入选项编号: ").strip() or '2'
@@ -150,6 +151,27 @@ def interact_with_problems(enriched_problems, selected_course, selected_homework
                         # 如果不全对，继续显示选项
                         print(f"[\x1b[0;33m!\x1b[0m] 题目未完全通过，继续尝试")
                         continue
+
+            elif choice == '3':
+                # 下载单元测试文件
+                print(f"[\x1b[0;36m!\x1b[0m] 准备下载单元测试文件...")
+
+                problem_id = selected_problem.get('problemId', '')
+                problem_name = selected_problem.get('problemName', '')
+
+                # 调用下载函数
+                from services import download_unit_test_file
+                success, result = download_unit_test_file(course_id, problem_id, homework_id, problem_name)
+
+                if success:
+                    print(f"[\x1b[0;32m+\x1b[0m] 单元测试文件已下载到: {result}")
+                else:
+                    if "暂无单元测试文件" in result:
+                        print(f"[\x1b[0;31mx\x1b[0m] {result}")
+                    else:
+                        print(f"[\x1b[0;31mx\x1b[0m] 单元测试文件下载失败: {result}")
+
+                continue
 
             else:
                 print("[\x1b[0;31mx\x1b[0m] 无效的选项，请重新选择")

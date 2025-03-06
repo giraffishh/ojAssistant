@@ -2,7 +2,7 @@
 
 from .requester import OJRequester
 from .auth_service import handle_login
-from .data_service import fetch_and_process_homeworks, fetch_and_process_problems
+from .data_service import fetch_and_process_homeworks, fetch_and_process_problems, download_unit_test_file
 
 __all__ = [
     'OJRequester',
