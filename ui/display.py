@@ -39,7 +39,7 @@ def display_homeworks(enriched_homeworks):
     print("-" * len(header))  # 分隔线长度与表头一致
 
     # 打印作业列表
-    for hw in enriched_homeworks:
+    for hw in reversed(enriched_homeworks):
         # 获取基本信息
         hw_id = hw['homeworkId']
         hw_name = hw['homeworkName']
@@ -128,10 +128,10 @@ def display_problems_list(enriched_problems):
     print("\r[\x1b[0;32m+\x1b[0m] 当前作业中的题目列表:")
 
     # 定义表头 - 更新表头以包含状态列
-    print(" {:<2} | {:<25} | {:<13} | {:<10} | {:<15}".format(
+    print(" {:<2} | {:<30} | {:<13} | {:<10} | {:<15}".format(
         "No.", "Problem Name", "Status", "Difficulty", "Time Limit"
     ))
-    print("-" * 70)  # 增加分隔线长度
+    print("-" * 85)  # 增加分隔线长度
 
     for i, problem in enumerate(enriched_problems):
         problem_name = problem.get('problemName', 'Unknown')
@@ -160,7 +160,7 @@ def display_problems_list(enriched_problems):
             time_limit = f"{details['timeLimit']['Java']} ms"
 
         # 基本格式，先不带颜色
-        base_line = " {:<2}  | {:<25} | {:<13} | {:<10} | {:<15}".format(
+        base_line = " {:<2}  | {:<30} | {:<13} | {:<10} | {:<15}".format(
             i + 1, problem_name, status, difficulty_text, time_limit
         )
 

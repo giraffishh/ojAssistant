@@ -1,5 +1,5 @@
 # OjAssistant
-🍀SustechJcoder平台助手
+🍀SustechJcoder平台助手 v1.0.0
 
 ### 📌 项目结构
 ```
@@ -31,13 +31,14 @@ ojAssistant/
 **Jcoder的CLI客户端**
 * 获取作业内容及相关统计数据、提交历史等内容，下载题目内容到本地
 * 便捷上传作业到Jcoder
-
-**TodoList:**
 * 获取题目对应的经检验的Junit单元测试模拟OJ进行代码测试
 
+> Intellij中Junit依赖安装参考<https://www.jetbrains.com/help/idea/junit.html#intellij>
+
+> 欢迎大家贡献出完整的测试用例，帮助大家更好地完成作业
 
 ### 🎨 开始使用
-需要在`config.py`中添加你的CAS账号和密码用于登录OJ
+需要在`config.py`中添加你的CAS账号和密码用于登录OJ，并修改WORK_DIRECTORY为Java作业所在目录
 
 项目只依赖`Python`和`requests`库
 ```bash

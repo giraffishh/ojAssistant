@@ -17,8 +17,7 @@ def select_course(courses, auto_select_first=True):
         course_name = courses['list'][0]['course_name']
         return selected_course
 
-    # 如果需要手动选择课程，可以在这里扩展代码
-    # 例如：让用户输入课程编号
+    # 如果需要手动选择课程，让用户输入课程编号
     print("\n请输入要查看的课程序号(1-{})，或直接回车选择最后一门课程:".format(len(courses['list'])),end='')
     user_input = input().strip()
 
@@ -50,13 +49,18 @@ def select_homework(enriched_homeworks):
     if not enriched_homeworks:
         return None
 
-    # 用户输入作业ID
-    print("\n请输入要查看的作业ID(直接回车默认查看最近作业):", end='')
-    user_input = input().strip()
+    # 自动选择作业
+    from config import AUTO_SELECT_HOMEWORK
+    if not AUTO_SELECT_HOMEWORK:
+        # 用户输入作业ID
+        print("\n请输入要查看的作业ID(直接回车默认查看最近作业):", end='')
+        user_input = input().strip()
+    else:
+        return enriched_homeworks[len(enriched_homeworks)-1]['homeworkId']
 
     # 如果用户没有输入，选择第一个作业（最近的）
     if not user_input:
-        selected_hw = enriched_homeworks[0]['homeworkId']
+        selected_hw = enriched_homeworks[len(enriched_homeworks)-1]['homeworkId']
         return selected_hw
     else:
         try:
