@@ -1,5 +1,5 @@
 # OjAssistant
-🍀SustechJcoder平台助手 v1.0.0
+🍀SustechJcoder平台助手 v1.1.0
 
 ### 📌 项目结构
 ```
@@ -40,6 +40,12 @@ ojAssistant/
 **一条命令完成脚本的安装/更新与配置**
 ```cmd
 powershell -Command "iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/giraffishh/ojAssistant/main/setup.ps1'))"
+```
+
+如果PowerShell的策略过于严格不允许脚本运行，请**以管理员身份运行**PowerShell
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ```
 
 然后在终端中只需输入`oja`即可启动脚本
