@@ -70,7 +70,7 @@ class OJRequester:
 
         if response.status_code != 302 or 'Location' not in response.headers:
             print("[\x1b[0;31mx\x1b[0m] 登录请求失败")
-            if response.status_code == 401:
+            if response.status_code == 401 or response.status_code == 200:
                 print("[\x1b[0;31mx\x1b[0m] 用户名或密码错误")
             return False
 

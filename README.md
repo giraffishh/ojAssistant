@@ -33,40 +33,19 @@ ojAssistant/
 * 便捷上传作业到Jcoder
 * 获取题目对应的经检验的Junit单元测试模拟OJ进行代码测试
 
-> Intellij中Junit依赖安装参考<https://www.jetbrains.com/help/idea/junit.html#intellij>
-
 > 欢迎大家贡献出完整的测试用例，帮助大家更好地完成作业
 
 ### 🎨 开始使用
-需要在`config.py`中添加你的CAS账号和密码用于登录OJ，并修改WORK_DIRECTORY为Java作业所在目录
 
-项目只依赖`Python`和`requests`库
-```bash
-pip install requests
-```
-在你工作的IDE中新建一个终端
-```bash
-cd ./ojAssistant  # 切换到脚本所在目录
-python main.py  #启动脚本
-```
-想要更加便捷地使用可以在PowerShell`$PROFILE`中添加函数
-```
-function oja {
-	python "填入存放脚本主函数的绝对路径如C:\\ojAssistant\main.py"
-}
-```
-文件保存为`Microsoft.PowerShell_profile.ps1`
-
-放在以下路径中`C:\Users\你的用户名\Documents\PowerShell\Microsoft.PowerShell_profile.ps1`
-
-然后刷新`$PROFILE`并重启终端
-```bash
-. $PROFILE
+**一条命令完成脚本的安装/更新与配置**
+```cmd
+powershell -Command "iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/giraffishh/ojAssistant/main/setup.ps1'))"
 ```
 
 然后在终端中只需输入`oja`即可启动脚本
 
 >更多相关设置配置见`config.py`
+> Intellij中Junit依赖安装参考<https://www.jetbrains.com/help/idea/junit.html#intellij>中的`add dependencies`部分
 
 ***
 
