@@ -26,17 +26,19 @@ catch {
     exit 1
 }
 
-# Get the current script directory
-if ($MyInvocation.MyCommand.Path) {
-    # 脚本作为文件执行时
-    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-} else {
-    # 脚本通过Invoke-Expression执行时
-    $scriptDir = Get-Location
+# Get the script directory
+$scriptDir = Join-Path $env:USERPROFILE "Documents\ojAssistant"
+
+# 确保安装目录存在
+if (-not (Test-Path $scriptDir)) {
+    Write-Host "Creating installation directory..." -ForegroundColor Yellow
+    New-Item -ItemType Directory -Path $scriptDir -Force | Out-Null
 }
 $mainPath = Join-Path $scriptDir "main.py"
 $configPath = Join-Path $scriptDir "config.py"
 $repoUrl = "https://github.com/giraffishh/ojAssistant.git"
+
+Write-Host "Installation directory: $scriptDir" -ForegroundColor Cyan
 
 # Function to read config file and return a hashtable of key-value pairs
 function Read-ConfigFile {
