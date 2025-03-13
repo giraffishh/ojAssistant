@@ -27,7 +27,13 @@ catch {
 }
 
 # Get the current script directory
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+if ($MyInvocation.MyCommand.Path) {
+    # 脚本作为文件执行时
+    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+} else {
+    # 脚本通过Invoke-Expression执行时
+    $scriptDir = Get-Location
+}
 $mainPath = Join-Path $scriptDir "main.py"
 $configPath = Join-Path $scriptDir "config.py"
 $repoUrl = "https://github.com/giraffishh/ojAssistant.git"

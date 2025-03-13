@@ -1,5 +1,5 @@
 # OjAssistant
-🍀SustechJcoder平台助手 v1.1.0
+🍀SustechJcoder平台助手 v1.1.1
 
 ### 📌 项目结构
 ```
@@ -35,11 +35,24 @@ ojAssistant/
 
 > 欢迎大家贡献出完整的测试用例，帮助大家更好地完成作业
 
-### 🎨 开始使用
+### 🔧 开始使用
 
 **一条命令完成脚本的安装/更新与配置**
 ```cmd
 powershell -Command "iex ((New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/giraffishh/ojAssistant/main/setup.ps1'))"
+```
+
+然后在Intellij中新建的终端中只需输入`oja`即可启动脚本
+
+>更多相关设置配置见`config.py`
+> Intellij中Junit依赖安装参考<https://www.jetbrains.com/help/idea/junit.html#intellij>中的`add dependencies`部分
+
+
+**问题排除**
+
+如果出现访问超时，可以替换成以下命令
+```cmd
+powershell -Command "iex ((New-Object System.Net.WebClient).DownloadString('https://raw.gitmirror.com/giraffishh/ojAssistant/main/setup.ps1'))"
 ```
 
 如果PowerShell的策略过于严格不允许脚本运行，请**以管理员身份运行**PowerShell
@@ -48,10 +61,17 @@ powershell -Command "iex ((New-Object System.Net.WebClient).DownloadString('http
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ```
 
-然后在终端中只需输入`oja`即可启动脚本
+### 🎨相关设置
 
->更多相关设置配置见`config.py`
-> Intellij中Junit依赖安装参考<https://www.jetbrains.com/help/idea/junit.html#intellij>中的`add dependencies`部分
+| 设置选项                 | 释义                                   |
+|----------------------| -------------------------------------- |
+| COOKIES_FILE         | 临时登陆凭证存放路径                   |
+| WORK_DIRECTORY       | 你的Java作业如Main.java所在路径        |
+| AUTO_SELECT_COURSE   | 是否自动进入课程界面                   |
+| AUTO_SELECT_HOMEWORK | 是否自动进入作业界面                   |
+| MAX_RECORDS_TO_SHOW  | 在作业详情页显示的最大历史提交记录数量 |
+
+
 
 ***
 
