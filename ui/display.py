@@ -1,5 +1,7 @@
 from utils import records_status_color, save_problem_to_file
 from datetime import datetime
+import re
+
 
 def display_courses(requester):
     """获取并显示课程列表"""
@@ -39,7 +41,7 @@ def display_homeworks(enriched_homeworks):
     print("-" * len(header))  # 分隔线长度与表头一致
 
     # 打印作业列表
-    for hw in reversed(enriched_homeworks):
+    for hw in enriched_homeworks:
         # 获取基本信息
         hw_id = hw['homeworkId']
         hw_name = hw['homeworkName']
@@ -134,7 +136,7 @@ def display_problems_list(enriched_problems):
     print("-" * 85)  # 增加分隔线长度
 
     for i, problem in enumerate(enriched_problems):
-        problem_name = problem.get('problemName', 'Unknown')
+        problem_name = re.sub(r'[^\w\s]', '', problem.get('problemName', 'Unknown'))
         details = problem.get('details', {})
 
         # 提取状态信息

@@ -25,9 +25,12 @@ def main():
     if not selected_course:
         return  # 如果无法选择课程，退出程序
 
+    from config import AUTO_SELECT_HOMEWORK
+    auto_select_homework = AUTO_SELECT_HOMEWORK
+
     while True:
         # 获取作业列表并处理
-        enriched_homeworks = fetch_and_process_homeworks(requester, selected_course)
+        enriched_homeworks = sorted(fetch_and_process_homeworks(requester, selected_course), key=lambda x: x['homeworkId'])
         if not enriched_homeworks:
             return  # 如果无法获取作业列表，退出程序
 
@@ -36,7 +39,8 @@ def main():
             return  # 如果无法显示作业列表，退出程序
 
         # 用户选择作业
-        selected_homework = select_homework(enriched_homeworks)
+
+        selected_homework = select_homework(enriched_homeworks, auto_select_first=auto_select_homework)
         if not selected_homework:
             return  # 如果用户没有选择有效的作业，退出程序
 
@@ -49,6 +53,9 @@ def main():
         if interact_with_problems(enriched_problems, selected_course, selected_homework, requester):
             return  # 正常退出
         # 如果返回False，则继续外层循环，即返回到作业列表
+
+        # 重置自动选择作业的标志，以便下次手动选择
+        auto_select_homework = False
 
 if __name__ == "__main__":
     main()

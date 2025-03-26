@@ -143,7 +143,6 @@ function Install-OjAssistant {
 
         # First, get and store the new config structure to be analyzed later
         $newConfigPath = Join-Path $tempDir "config.py"
-        $newConfigData = Read-ConfigFile -configPath $newConfigPath
 
         # Copy files from temp to installation directory - FIX: Improved directory handling
         Write-Host "Updating files..." -ForegroundColor Yellow
@@ -208,7 +207,6 @@ function Install-OjAssistant {
             # Check if this is a config key line
             if ($line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)\s*$') {
                 $key = $matches[1]
-                $defaultValue = $matches[2].Trim()
 
                 # If we have this key in existing config and it's not REMOVE/empty, use that value
                 if ($ExistingConfig.ContainsKey($key) -and

@@ -37,11 +37,12 @@ def select_course(courses, auto_select_first=True):
         print("[\x1b[0;31mx\x1b[0m] 无效的输入，请输入数字")
         return None
 
-def select_homework(enriched_homeworks):
+def select_homework(enriched_homeworks, auto_select_first):
     """处理用户选择作业的逻辑
 
     Args:
         enriched_homeworks: 包含详细信息的作业列表
+        auto_select_first: 是否自动选择第一份作业
 
     Returns:
         selected_hw: 用户选择的作业ID，如果选择失败则返回None
@@ -50,8 +51,7 @@ def select_homework(enriched_homeworks):
         return None
 
     # 自动选择作业
-    from config import AUTO_SELECT_HOMEWORK
-    if not AUTO_SELECT_HOMEWORK:
+    if not auto_select_first:
         # 用户输入作业ID
         print("\n请输入要查看的作业ID(直接回车默认查看最近作业):", end='')
         user_input = input().strip()
