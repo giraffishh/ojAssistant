@@ -35,13 +35,126 @@ def get_file_hash(content=None, file_path=None):
     return None
 
 
-def handle_submission(requester, problem, course_id, homework_id):
-    """处理Java文件的选择和提交。自动使用工作目录中的Main.java文件。
-
-    Returns:
-        False: 提交失败或取消
-        dict: 包含提交结果信息的字典，其中all_correct键表示是否全部通过
+def get_java_file_paths(work_dir):
     """
+    获取用户指定的Java文件路径列表.
+    - 用户可以输入逗号分隔的文件名/路径 (相对于工作目录或绝对路径). 用户可以省略 .java 扩展名.
+    - 用户可以输入单个目录路径 (将使用该目录下的所有 .java 文件).
+    - 用户可以直接按 Enter:
+        - 如果工作目录下有 Main.java, 则使用 Main.java.
+        - 否则, 如果工作目录下有其他 .java 文件, 则使用所有这些 .java 文件.
+        - 否则, 提示无文件并重新提示.
+    - 输入 'q' 退出.
+    """
+    while True:
+        paths_input_str = input(
+            f"输入Java文件名/路径 (多个用','分隔), 或一个目录, 或按Enter使用工作目录下的文件 (q退出):\n"
+            f"(工作目录: {work_dir})\n> "
+        ).strip()
+
+        if paths_input_str.lower() == 'q':
+            print("[\x1b[0;33m!\x1b[0m] 已取消选择文件")
+            return None
+
+        selected_files = []
+
+        if not paths_input_str:  # 用户按下 Enter
+            print(f"[\x1b[0;36m!\x1b[0m] 检查工作目录 '{work_dir}'...")
+            main_java_path = os.path.join(work_dir, "Main.java")
+            
+            # 确保 work_dir 存在且是目录
+            java_files_in_work_dir = []
+            if os.path.isdir(work_dir):
+                java_files_in_work_dir = [
+                    os.path.join(work_dir, f) for f in os.listdir(work_dir)
+                    if f.lower().endswith(".java") and os.path.isfile(os.path.join(work_dir, f))
+                ]
+            else:
+                print(f"[\x1b[0;31mx\x1b[0m] 工作目录 '{work_dir}' 不存在或不是一个目录。")
+                continue
+
+
+            if os.path.exists(main_java_path) and os.path.isfile(main_java_path):
+                print(f"[\x1b[0;32m+\x1b[0m] 找到并选择默认文件: {main_java_path}")
+                selected_files.append(os.path.abspath(main_java_path))
+            elif java_files_in_work_dir:
+                print(f"[\x1b[0;32m+\x1b[0m] 未找到 Main.java，选择工作目录中所有 .java 文件:")
+                for f_path in java_files_in_work_dir:
+                    abs_f_path = os.path.abspath(f_path)
+                    print(f"  - {abs_f_path}")
+                    selected_files.append(abs_f_path)
+            else:
+                print(f"[\x1b[0;33m!\x1b[0m] 工作目录 '{work_dir}' 中未找到 Main.java 或其他 .java 文件。请重新输入。")
+                continue 
+        
+        elif os.path.isdir(paths_input_str): # 输入是目录
+            print(f"[\x1b[0;36m!\x1b[0m] 扫描目录 '{paths_input_str}' 中的 .java 文件...")
+            dir_path = os.path.abspath(paths_input_str) # 使用绝对路径
+            found_in_dir = False
+            for item in os.listdir(dir_path):
+                if item.lower().endswith(".java"):
+                    full_path = os.path.join(dir_path, item)
+                    if os.path.isfile(full_path):
+                        selected_files.append(full_path)
+                        found_in_dir = True
+            if not found_in_dir:
+                print(f"[\x1b[0;33m!\x1b[0m] 在目录 '{dir_path}' 中未找到 .java 文件。请重新输入。")
+                continue 
+        
+        else: # 输入是逗号分隔的文件列表
+            potential_paths_str = [p.strip() for p in paths_input_str.split(',')]
+            temp_selected_files = []
+            all_input_items_resolved = True # 标志以跟踪列表中的所有 p_str 是否都已解析
+
+            for p_str_input_item in potential_paths_str:
+                if not p_str_input_item: # 跳过空字符串（例如，如果用户输入 "file1,,file2"）
+                    continue
+
+                resolved_for_item = False
+                
+                # 要尝试的文件名候选列表
+                filename_candidates_to_try = [p_str_input_item]
+                if not p_str_input_item.lower().endswith(".java"):
+                    filename_candidates_to_try.append(p_str_input_item + ".java")
+
+                for filename_candidate in filename_candidates_to_try:
+                    path_to_check = filename_candidate
+                    if not os.path.isabs(filename_candidate):
+                        path_to_check = os.path.join(work_dir, filename_candidate)
+                    
+                    abs_path_to_check = os.path.abspath(path_to_check)
+
+                    if os.path.isfile(abs_path_to_check) and abs_path_to_check.lower().endswith(".java"):
+                        temp_selected_files.append(abs_path_to_check)
+                        resolved_for_item = True
+                        break # 找到了此 p_str_input_item 的有效文件
+                
+                if not resolved_for_item:
+                    print(f"[\x1b[0;31mx\x1b[0m] 输入项 '{p_str_input_item}' 无法解析为有效的 .java 文件。")
+                    all_input_items_resolved = False
+                    break # 如果一项无效，则停止处理此列表
+            
+            if not all_input_items_resolved:
+                 print("[\x1b[0;31mx\x1b[0m] 输入的列表中包含无法解析的文件。请重新输入。")
+                 continue
+            selected_files = temp_selected_files
+
+        if selected_files:
+            # 删除重复项同时保留顺序
+            selected_files = list(dict.fromkeys(selected_files))
+            print(f"[\x1b[0;32m+\x1b[0m] 已选择文件:")
+            for f_path in selected_files:
+                print(f"  - {f_path}")
+            return selected_files
+        elif not paths_input_str: # 如果是空输入且未找到文件，则已在上面处理并 continue
+            pass
+        else: # 如果输入非空但未选择任何文件 (例如，无效的逗号分隔列表或空目录)
+            print(f"[\x1b[0;33m!\x1b[0m] 未选择任何有效的 .java 文件。请重新输入。")
+            # 循环将继续
+
+
+def handle_submission(requester, problem, course_id, homework_id):
+    """处理Java文件的选择和提交。支持多个Java文件。"""
     # 导入配置
     try:
         sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -60,72 +173,69 @@ def handle_submission(requester, problem, course_id, homework_id):
     print(f"提交题目解答: {problem['title'] if 'title' in problem else problem['problemName']}")
     print(f"{'-' * 40}")
 
-    # 自动查找Main.java文件
-    default_file = os.path.join(WORK_DIRECTORY, "Main.java")
-    if os.path.exists(default_file):
-        print(f"[\x1b[0;32m+\x1b[0m] 找到默认文件: {default_file}")
-        use_default = input("是否使用此文件? (y/n，默认y): ").strip().lower() or 'y'
+    selected_file_paths = get_java_file_paths(WORK_DIRECTORY)
+    if not selected_file_paths:
+        print("[\x1b[0;33m!\x1b[0m] 未选择文件，提交取消")
+        return False
 
-        if use_default == 'y':
-            file_path = default_file
-        else:
-            # 用户选择输入其他文件路径
-            file_path = get_java_file_path()
-            if not file_path:
-                return False
-    else:
-        print(f"[\x1b[0;33m!\x1b[0m] 在工作目录({WORK_DIRECTORY})中未找到作业的文件")
-        file_path = get_java_file_path()
-        if not file_path:
-            return False
-
-    # 读取当前文件内容
+    # 读取当前文件内容并计算哈希值
     from utils.file_handlers import read_java_file
-    current_file_content = read_java_file(file_path)
-    if not current_file_content:
-        print(f"[\x1b[0;31mx\x1b[0m] 无法读取文件内容，提交取消")
-        return False
+    current_files_content_hashes = {}
+    for file_path in selected_file_paths:
+        content = read_java_file(file_path)
+        if not content:
+            print(f"[\x1b[0;31mx\x1b[0m] 无法读取文件内容: {file_path}，提交取消")
+            return False
+        
+        file_hash = get_file_hash(content=content)
+        if not file_hash:
+            print(f"[\x1b[0;31mx\x1b[0m] 无法计算文件哈希值: {file_path}，提交取消")
+            return False
+        
+        filename_key = os.path.basename(file_path)  # 使用带扩展名的文件名作为键
+        current_files_content_hashes[filename_key] = file_hash
 
-    # 计算当前文件的哈希值
-    current_file_hash = get_file_hash(content=current_file_content)
-    if not current_file_hash:
-        print(f"[\x1b[0;31mx\x1b[0m] 无法计算文件哈希值，提交取消")
-        return False
-
-    # 查找上一次提交记录中的代码
-    last_submitted_code = None
+    # 查找上一次提交记录中的代码哈希
+    last_submission_files_hashes = {}
     last_submission_time = None
     last_record_id = None
 
     if 'submission_records' in problem and problem['submission_records'] and len(problem['submission_records']) > 0:
-        # 只获取最近一次提交记录
-        latest_record = problem['submission_records'][0]  # 假设记录是按时间排序的，最新的在前面
+        latest_record = problem['submission_records'][0]
+        if 'code' in latest_record and latest_record['code']: 
+            # 假设 API 返回的 code 字典的键也是带扩展名的文件名
+            for filename_key_from_api, code_content in latest_record['code'].items():
+                last_code_hash = get_file_hash(content=code_content)
+                if last_code_hash:
+                    last_submission_files_hashes[filename_key_from_api] = last_code_hash
+            
+            if last_submission_files_hashes:
+                last_submission_time = latest_record.get('submissionTime', 'Unknown')
+                last_record_id = latest_record.get('recordId', 'Unknown')
 
-        if 'code' in latest_record and latest_record['code']:
-            # 找到Java文件的代码
-            for code_file, code_content in latest_record['code'].items():
-                if code_file.endswith('.java'):
-                    last_submitted_code = code_content
-                    last_submission_time = latest_record.get('submissionTime', 'Unknown')
-                    last_record_id = latest_record.get('recordId', 'Unknown')
+    # 比较当前文件哈希和上次提交的文件哈希
+    # 仅当文件名集合和每个文件的哈希都相同时才认为是重复提交
+    if current_files_content_hashes and last_submission_files_hashes:
+        # 检查文件名集合是否相同 (键现在是带扩展名的)
+        if sorted(current_files_content_hashes.keys()) == sorted(last_submission_files_hashes.keys()):
+            all_hashes_match = True
+            for filename_key, current_hash in current_files_content_hashes.items():  # filename_key 是带扩展名的
+                if last_submission_files_hashes.get(filename_key) != current_hash:  # 使用相同的键格式进行比较
+                    all_hashes_match = False
                     break
-
-    # 如果找到上次提交的代码，计算它的哈希并比较
-    if last_submitted_code:
-        last_code_hash = get_file_hash(content=last_submitted_code)
-
-        if last_code_hash and last_code_hash == current_file_hash:
-            print(f"\n[\x1b[0;31m!\x1b[0m] 检测到文件内容与上一次提交相同，请在修改后及时保存(Ctrl+S)，或开启自动保存功能")
-            print(f"上次提交时间: {last_submission_time}")
-            print(f"上次提交ID: {last_record_id}")
-            print(f"当前文件: {file_path}")
-            print(f"[\x1b[0;31mx\x1b[0m] 提交已取消")
-            return False
+            
+            if all_hashes_match:
+                print(f"\n[\x1b[0;31m!\x1b[0m] 检测到提交的文件内容与上一次提交完全相同。")
+                print(f"上次提交时间: {last_submission_time}")
+                print(f"上次提交ID: {last_record_id}")
+                print(f"当前提交文件: {', '.join(os.path.basename(f) for f in selected_file_paths)}")
+                print(f"[\x1b[0;31mx\x1b[0m] 提交已取消。请在修改后保存文件。")
+                return False
 
     # 确认提交
     print(f"\n准备提交:")
     print(f"- 题目: {problem['title'] if 'title' in problem else problem['problemName']}")
-    print(f"- 文件: {file_path}")
+    print(f"- 文件: {', '.join(os.path.basename(f) for f in selected_file_paths)}") # 显示所有选定文件的基本名称
     confirm = input("确认提交? (y/n，默认y): ").strip().lower() or 'y'
     if confirm != 'y':
         print("[\x1b[0;33m!\x1b[0m] 已取消提交")
@@ -136,7 +246,7 @@ def handle_submission(requester, problem, course_id, homework_id):
         homework_id,
         problem['problemId'],
         course_id,
-        file_path
+        selected_file_paths # 传递文件路径列表
     )
 
     # 如果提交成功并获取到record_id，则等待并显示批改结果
@@ -217,33 +327,3 @@ def wait_and_show_grading_result(requester, record_id, course_id, homework_id, p
     # 如果尝试次数用完仍未完成批改
     print("[\x1b[0;31mx\x1b[0m] 批改超时，请稍后在OJ平台上查看结果")
     return {'all_correct': False}
-
-
-def get_java_file_path():
-    """获取Java文件路径"""
-    while True:
-        file_path = input("请输入Java文件路径或文件名（输入'q'退出）: ")
-
-        if file_path.lower() == 'q':
-            print("[\x1b[0;33m!\x1b[0m] 已取消提交")
-            return None
-
-        # 如果是完整路径，直接检查文件是否存在
-        if os.path.isabs(file_path) and os.path.exists(file_path):
-            return file_path
-
-        # 如果输入不是完整路径，而只是文件名，则在工作目录中查找
-        elif WORK_DIRECTORY and not os.path.dirname(file_path):
-            possible_path = os.path.join(WORK_DIRECTORY, file_path)
-            if os.path.exists(possible_path):
-                print(f"[\x1b[0;32m+\x1b[0m] 在工作目录中找到文件: {possible_path}")
-                file_path = possible_path
-                return file_path
-
-        if not os.path.exists(file_path):
-            print("[\x1b[0;31mx\x1b[0m] 找不到文件，请重试。")
-            continue
-
-        if not file_path.lower().endswith('.java'):
-            print("[\x1b[0;31mx\x1b[0m] 请选择Java文件（.java）")
-            continue

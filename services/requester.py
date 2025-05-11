@@ -457,7 +457,7 @@ class OJRequester:
             print(f"[\x1b[0;31mx\x1b[0m] 请求失败，HTTP状态码: {response.status_code}")
             return False
 
-    def submit_homework(self, homework_id, problem_id, course_id, file_path):
+    def submit_homework(self, homework_id, problem_id, course_id, file_paths):
         """提交Java作业到OJ平台"""
         # 检查CSRF令牌是否存在
         if not self.csrf_token:
@@ -467,18 +467,27 @@ class OJRequester:
         # 导入必要的库
         from utils.file_handlers import read_java_file
 
-        # 读取Java文件
-        print(f"[\x1b[0;36m!\x1b[0m] 读取Java文件中...")
-        java_content = read_java_file(file_path)
-        if not java_content:
-            print("[\x1b[0;31mx\x1b[0m] 无法读取Java文件")
+        files_dict = {}
+        if not file_paths: # 确保 file_paths 不为空
+            print("[\x1b[0;31mx\x1b[0m] 没有提供Java文件路径")
             return None
 
-        # 提取不带扩展名的文件名
-        file_name = os.path.splitext(os.path.basename(file_path))[0]
+        print(f"[\x1b[0;36m!\x1b[0m] 读取Java文件中...")
+        for file_path in file_paths:
+            java_content = read_java_file(file_path)
+            if not java_content:
+                print(f"[\x1b[0;31mx\x1b[0m] 无法读取Java文件: {file_path}")
+                return None 
+
+            # 提取带扩展名的文件名
+            file_name = os.path.basename(file_path)
+            files_dict[file_name] = java_content
+        
+        if not files_dict: # 如果所有文件都读取失败
+            print("[\x1b[0;31mx\x1b[0m] 无法读取任何Java文件内容")
+            return None
 
         # 准备files JSON结构
-        files_dict = {file_name: java_content}
         files_json = json.dumps(files_dict)
 
         # 准备API URL
@@ -500,7 +509,7 @@ class OJRequester:
             'homeworkId': homework_id,
             'problemId': problem_id,
             'courseId': course_id,
-            'language': '2',  # 2 代表Java
+            'language': '3',  # 将语言从 '2' 改为 '3'，可能单文件是2，多文件是3
             'subGroup': 'false',
             'files': files_json
         }

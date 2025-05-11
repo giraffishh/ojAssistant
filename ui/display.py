@@ -158,8 +158,14 @@ def display_problems_list(enriched_problems):
 
         # 提取时间限制
         time_limit = "Unknown"
-        if 'timeLimit' in details and 'Java' in details['timeLimit']:
-            time_limit = f"{details['timeLimit']['Java']} ms"
+        if 'timeLimit' in details and isinstance(details['timeLimit'], dict):
+            if 'Java' in details['timeLimit']:
+                time_limit = f"{details['timeLimit']['Java']} ms"
+            elif 'Junit' in details['timeLimit']:  # Check for Junit if Java is not present
+                time_limit = f"{details['timeLimit']['Junit']} ms"
+            elif details['timeLimit']:  # Fallback to the first available time limit
+                first_lang = next(iter(details['timeLimit']))
+                time_limit = f"{details['timeLimit'][first_lang]} ms ({first_lang})"
 
         # 基本格式，先不带颜色
         base_line = " {:<2}  | {:<30} | {:<13} | {:<10} | {:<15}".format(
@@ -361,44 +367,57 @@ def display_grading_result(result):
     print("\n[\x1b[0;36m!\x1b[0m]测试用例结果:")
 
     # 表头
-    header = " {:<3} | {:<6} | {:<15} | {:<8} | {:<10} | {:<25}".format(
+    header = " {:<3} | {:<8} | {:<17} | {:<10} | {:<12} | {:<27}".format(
         "No.", "Status", "Test Case", "Time(ms)", "Memory(MB)", "Message"
     )
     print(header)
-    print("-" * 80)
+    print("-" * (len(header) + 2))  # Adjust separator length
 
     # 表格内容
     for idx, test_result in enumerate(result['resultList']):
         status = test_result['state']
-        title = test_result['title']
+        title_orig = test_result['title']
         time_used = test_result['time']
         memory_used = test_result['memory']
-        message = test_result['message'] if test_result['message'] else "N/A"
+        message_orig = test_result['message'] if test_result['message'] else "N/A"
+
+        # Sanitize title and message by replacing newlines and carriage returns with a space
+        title_orig = title_orig.replace('\n', ' ').replace('\r', ' ')
+        message_orig = message_orig.replace('\n', ' ').replace('\r', ' ')
 
         # 根据状态设置颜色
         _, status_color = records_status_color(status)
-        status_colored = f"{status_color}{status}\x1b[0m"
+        status_colored = f"{status_color}{status:<6}\x1b[0m"  # Pad status for color replacement
 
-        # 使用表格格式输出
-        row = " {:<3} | {:<6} | {:<15} | {:<8} | {:<10} | {:<25}".format(
+        # Truncate title and message to fit column width
+        title_display = (title_orig[:14] + "...") if len(title_orig) > 17 else title_orig
+        message_display = (message_orig[:24] + "...") if len(message_orig) > 27 else message_orig
+
+        # 使用表格格式输出, ensure status has fixed width for replacement
+        plain_status_for_align = f"{status:<6}"
+
+        row_format = " {:<3} | {:<8} | {:<17} | {:<10} | {:<12} | {:<27}"
+
+        # Construct the row with plain status first for alignment, then replace with colored
+        temp_row = row_format.format(
             idx + 1,
-            status,  # 普通文本版本(用于对齐)
-            title,
+            plain_status_for_align,
+            title_display,
             time_used,
             memory_used,
-            message[:10] + ('...' if len(message) > 25 else '')
+            message_display
         )
 
-        # 替换状态文本为彩色版本
-        row = row.replace(status, status_colored, 1)
+        # Replace the plain status part with the colored status part
+        final_row = temp_row.replace(plain_status_for_align, status_colored, 1)
 
-        print(row)
+        print(final_row)
 
     # 如果有消息太长，显示完整版本
     for idx, test_result in enumerate(result['resultList']):
-        message = test_result['message']
-        if len(message) > 10:
-            print(f"\n测试用例 {idx + 1} 完整消息:")
-            print(f"{message}")
+        message_orig = test_result['message']
+        if len(message_orig) > 27:
+            print(f"\n测试用例 {idx + 1} ({test_result['title']}) 完整消息:")
+            print(f"  {message_orig}")
 
-    print(f"{'-' * 80}")
+    print("-" * (len(header) + 2))  # Adjust separator length

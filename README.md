@@ -1,5 +1,5 @@
 # OjAssistant
-🍀SustechJcoder平台助手 v1.1.2
+🍀SustechJcoder平台助手 v1.2.1
 
 ### 📌 项目结构
 ```
